@@ -1,0 +1,36 @@
+# Ignore environment files
+.env
+.env.*
+
+# Ignore dependencies
+node_modules/
+venv/
+__pycache__/
+*.py[cod]
+
+# Ignore system files
+.DS_Store
+Thumbs.db
+
+# Ignore IDE/editor files
+.vscode/
+.idea/
+
+# Ignore logs
+*.log
+
+# Ignore build outputs
+dist/
+build/
+.next/
+
+# Ignore OS-specific or temp files
+*.swp
+*.bak
+*~
+tmp/
+
+# Project-specific ignores (from previous organization)
+*.db
+datamind/data/*.db
+datamind/data/*.csv

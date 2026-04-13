@@ -36,6 +36,23 @@ def initialize_session_state() -> None:
         "theme": "dark",
         "analyst_lessons": [],
         "predictions": {},  # Changed to dict for {text, fig}
+        # Settings Dashboard State
+        "settings": {
+            "profile": {
+                "role": "Senior Strategic Analyst",
+                "access_level": "Level 5 Forensic Authorization"
+            },
+            "ai_engine": {
+                "model": "qwen2.5-coder:1.5b",
+                "autonomous_mode": True,
+                "show_reasoning": True,
+                "temperature": 0.7
+            },
+            "system": {
+                "theme": "dark",
+                "auto_refresh": True
+            }
+        }
     }
 
     for key, value in defaults.items():

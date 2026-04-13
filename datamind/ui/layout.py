@@ -76,32 +76,36 @@ def apply_custom_styles():
         }
 
         /* Target the Right Column in a 2-column layout - Premium Style */
-        [data-testid="stHorizontalBlock"] > div:last-child {
+        /* Specific only to main workspace to avoid affecting sidebar utilities */
+        [data-testid="stMain"] [data-testid="stHorizontalBlock"] > div:last-child {
             background: var(--bg-card) !important;
             backdrop-filter: blur(15px) !important;
             -webkit-backdrop-filter: blur(15px) !important;
             border-left: 1px solid var(--border-glass) !important;
             border-radius: 24px !important;
-            padding: 1rem 1.5rem 1.5rem 1.5rem !important;
+            padding: 1.5rem 1.5rem 1.5rem 1.5rem !important;
             box-shadow: -15px 0 50px rgba(0,0,0,0.3) !important;
             transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1) !important;
+            margin-top: 0 !important;
         }
 
         /* Main Workspace Adjustment */
         .main-workspace {
-            padding: 1rem 2rem 2rem 2rem;
+            padding: 1.5rem 2rem 2rem 2rem;
             transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
             max-width: 100%;
             overflow-x: auto;
             word-wrap: break-word;
             background: linear-gradient(180deg, rgba(15,23,42,0) 0%, rgba(15,23,42,0.3) 100%);
+            margin-top: 0 !important;
         }
 
         .main-workspace.expanded {
-            padding: 1rem 2rem 2rem 2rem !important;
+            padding: 1.5rem 2rem 2rem 2rem !important;
             max-width: 100%;
             overflow-x: auto;
             background: linear-gradient(180deg, rgba(15,23,42,0) 0%, rgba(15,23,42,0.5) 100%);
+            margin-top: 0 !important;
         }
 
         /* Premium Button Styling */
@@ -133,10 +137,16 @@ def apply_custom_styles():
 
         /* Sidebar Specific Button Fix for Horizontal Alignment */
         [data-testid="stSidebar"] [data-testid="stHorizontalBlock"] .stButton button {
-            padding: 8px 10px !important;
+            padding: 10px 4px !important; /* Reduced horizontal padding for auto-scaling */
             font-size: 13px !important;
-            min_width: 0 !important;
+            min-width: 0 !important;
             width: 100% !important;
+            height: 40px !important; /* Slightly more compact */
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            white-space: nowrap !important;
+            overflow: hidden !important;
         }
 
         /* Premium File Uploader */
@@ -305,6 +315,126 @@ def apply_custom_styles():
             color: white !important;
             font-weight: 600 !important;
         }
+
+        /* Premium Data Manager Cards */
+        .data-manager-card {
+            background: var(--card-glass) !important;
+            border: 1px solid var(--border-glass) !important;
+            border-radius: 20px !important;
+            padding: 1.25rem 2rem !important;
+            transition: all 0.3s ease !important;
+            background: linear-gradient(135deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0.02) 100%) !important;
+            backdrop-filter: blur(10px) !important;
+        }
+        .data-manager-card:hover {
+            background: rgba(255, 255, 255, 0.08) !important;
+            border-color: rgba(99, 102, 241, 0.3) !important;
+            transform: scale(1.005);
+        }
+        .file-icon-box {
+            font-size: 2.2rem !important;
+            background: rgba(255, 255, 255, 0.05);
+            width: 60px;
+            height: 60px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 14px;
+            flex-shrink: 0;
+        }
+        .activate-button-container {
+            width: 140px;
+            flex-shrink: 0;
+            display: flex;
+            align-items: center;
+        }
+        .activate-button-container .stButton button {
+            height: 48px !important;
+            border-radius: 12px !important;
+            background: var(--gradient-primary) !important;
+            width: 100% !important;
+        }
+
+        /* Settings Dashboard Styles */
+        .settings-section-card {
+            background: var(--card-glass) !important;
+            border: 1px solid var(--border-glass) !important;
+            border-radius: 20px !important;
+            padding: 2.5rem !important;
+            margin-bottom: 2rem !important;
+            backdrop-filter: blur(15px) !important;
+            -webkit-backdrop-filter: blur(15px) !important;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2) !important;
+        }
+        .settings-header {
+            font-family: "Outfit", sans-serif !important;
+            color: white !important;
+            font-size: 1.4rem !important;
+            font-weight: 700 !important;
+            margin-bottom: 0.5rem !important;
+            display: flex !important;
+            align-items: center !important;
+            gap: 0.75rem !important;
+        }
+        .settings-label {
+            color: #E2E8F0 !important;
+            font-size: 0.95rem !important;
+            font-weight: 600 !important;
+            margin-bottom: 0.25rem !important;
+        }
+        .settings-helper {
+            color: #94A3B8 !important;
+            font-size: 0.85rem !important;
+            margin-bottom: 1rem !important;
+        }
+        .settings-divider {
+            height: 1px;
+            background: rgba(255,255,255,0.06);
+            margin: 1.5rem 0;
+        }
+
+        /* Read-only Data Dashboard Styles */
+        .dash-row {
+            display: flex !important;
+            justify-content: space-between !important;
+            align-items: center !important;
+            padding: 0.75rem 0 !important;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.04) !important;
+        }
+        .dash-row:last-child {
+            border-bottom: none !important;
+        }
+        .dash-label {
+            color: #94A3B8 !important;
+            font-size: 0.95rem !important;
+            font-weight: 500 !important;
+        }
+        .dash-value {
+            color: white !important;
+            font-size: 0.95rem !important;
+            font-weight: 600 !important;
+            font-family: 'Inter', monospace !important;
+            background: rgba(99, 102, 241, 0.1) !important;
+            padding: 4px 12px !important;
+            border-radius: 6px !important;
+            border: 1px solid rgba(99, 102, 241, 0.2) !important;
+        }
+        .dash-status-running {
+            color: #10B981 !important;
+            font-weight: 700 !important;
+            display: flex !important;
+            align-items: center !important;
+            gap: 6px !important;
+        }
+        .dash-status-running::before {
+            content: "" !important;
+            width: 8px !important;
+            height: 8px !important;
+            background: #10B981 !important;
+            border-radius: 50% !important;
+            display: inline-block !important;
+            box-shadow: 0 0 10px #10B981 !important;
+        }
         </style>
     """, unsafe_allow_html=True)
 
@@ -424,9 +554,9 @@ def render_chat_interface(chat_history: List[Dict[str, Any]], filter_category: O
 
     # Premium Header
     st.markdown("""
-        <div style='margin-bottom: 1.5rem;'>
-            <h3 style='margin: 0; font-family: "Outfit"; font-weight: 700; color: white; letter-spacing: -0.5px;'>Analyst Dialogue</h3>
-            <p style='margin: 0.5rem 0 0 0; color: #94A3B8; font-size: 0.875rem;'>Dialogue history and reasoning</p>
+        <div style='margin-bottom: 1rem; margin-top: 0;'>
+            <h3 style='margin: 0; font-family: "Outfit"; font-weight: 700; color: white; letter-spacing: -0.5px; line-height: 1;'>Analyst Dialogue</h3>
+            <p style='margin: 0.25rem 0 0 0; color: #94A3B8; font-size: 0.875rem;'>Dialogue history and reasoning</p>
         </div>
     """, unsafe_allow_html=True)
 

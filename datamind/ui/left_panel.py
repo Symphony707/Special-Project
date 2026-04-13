@@ -18,11 +18,11 @@ from datamind.config import OLLAMA_MODEL
 
 def render_left_panel():
     """Main rendering loop for left panel with premium UI."""
-    # Premium Header Section
+    # Premium Header Section - Remove top margin to fix alignment
     st.markdown("""
-        <div style='display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.5rem;'>
-            <div>
-                <h3 style='margin: 0; font-family: "Outfit"; font-weight: 700; color: white;'>Source Data</h3>
+        <div style='display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem; margin-top: 0;'>
+            <div style='margin-top: 0;'>
+                <h3 style='margin: 0; font-family: "Outfit"; font-weight: 700; color: white; line-height: 1;'>Source Data</h3>
                 <p style='margin: 0.25rem 0 0 0; color: #94A3B8; font-size: 0.875rem;'>Upload your CSV dataset to begin analysis</p>
             </div>
         </div>

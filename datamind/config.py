@@ -6,6 +6,10 @@ Centralized configuration for model names, timeouts, thresholds, and system beha
 
 import os
 from typing import Final
+from dotenv import load_dotenv
+
+# Load environment variables from .env if it exists
+load_dotenv()
 
 # ── LLM Configuration ─────────────────────────────────────────────
 OLLAMA_MODEL: Final[str] = os.getenv("OLLAMA_MODEL", "qwen2.5-coder:1.5b")

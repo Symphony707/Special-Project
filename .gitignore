@@ -30,7 +30,10 @@ build/
 *~
 tmp/
 
-# Project-specific ignores (from previous organization)
+# Project-specific ignores
 *.db
-datamind/data/*.db
-datamind/data/*.csv
+*.csv
+*.xlsx
+*.xls
+*.parquet
+datamind/data/

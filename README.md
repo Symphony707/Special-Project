@@ -23,11 +23,24 @@ Multi-dataset inventory control. Manage your analytical assets with high-fidelit
 1.  **Environment Setup**:
     Ensure you have Python 3.10+ installed and the required dependencies:
     ```bash
-    pip install -r datamind/requirements.txt
+    pip install -r requirements.txt
     ```
 
-2.  **Intelligence Configuration**:
-    Create a `.env` file from the provided example and configure your local LLM nodes.
+2.  **Ollama Intelligence Setup**:
+    This project requires a local Ollama instance for LLM inference.
+    - **Install Ollama**: Follow instructions at [ollama.com](https://ollama.com).
+    - **Pull Model**:
+      ```bash
+      ollama pull qwen2.5-coder:1.5b
+      ```
+    - **Start Server**: Ensure the server is running (`ollama serve`).
+
+3.  **Intelligence Configuration**:
+    Create a `.env` file from the provided example:
+    ```bash
+    cp .env.example .env
+    ```
+    (Optional) Tune configuration values in `.env` if needed.
 
 3.  **Launch Platform**:
     Run the following command from the project root:

@@ -82,14 +82,14 @@ def apply_custom_styles():
             -webkit-backdrop-filter: blur(15px) !important;
             border-left: 1px solid var(--border-glass) !important;
             border-radius: 24px !important;
-            padding: 1.5rem !important;
+            padding: 1rem 1.5rem 1.5rem 1.5rem !important;
             box-shadow: -15px 0 50px rgba(0,0,0,0.3) !important;
             transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1) !important;
         }
 
         /* Main Workspace Adjustment */
         .main-workspace {
-            padding: 2rem;
+            padding: 1rem 2rem 2rem 2rem;
             transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
             max-width: 100%;
             overflow-x: auto;
@@ -98,7 +98,7 @@ def apply_custom_styles():
         }
 
         .main-workspace.expanded {
-            padding: 2rem !important;
+            padding: 1rem 2rem 2rem 2rem !important;
             max-width: 100%;
             overflow-x: auto;
             background: linear-gradient(180deg, rgba(15,23,42,0) 0%, rgba(15,23,42,0.5) 100%);
@@ -129,6 +129,14 @@ def apply_custom_styles():
         }
         .stButton button[data-baseweb="button-secondary"]:hover {
             background: rgba(255, 255, 255, 0.15) !important;
+        }
+
+        /* Sidebar Specific Button Fix for Horizontal Alignment */
+        [data-testid="stSidebar"] [data-testid="stHorizontalBlock"] .stButton button {
+            padding: 8px 10px !important;
+            font-size: 13px !important;
+            min_width: 0 !important;
+            width: 100% !important;
         }
 
         /* Premium File Uploader */

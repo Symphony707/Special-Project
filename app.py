@@ -26,18 +26,18 @@ initialize_session_state()
 # 3. Apply Premium SaaS Styles
 apply_custom_styles()
 
-# 4. Header Section
+# 4. Header Section - Tightened Padding for Better Alignment
 st.markdown("""
-<div style='padding: 2rem 0 1.5rem 0; margin-bottom: 1rem; border-bottom: 1px solid rgba(255,255,255,0.08);'>
+<div style='padding: 1rem 0 1rem 0; margin-bottom: 0.5rem; border-bottom: 1px solid rgba(255,255,255,0.08);'>
     <div style='display: flex; align-items: center; gap: 1.5rem;'>
-        <div style='background: linear-gradient(135deg, #6366F1 0%, #4F46E5 100%); width: 60px; height: 60px; border-radius: 16px; display: flex; align-items: center; justify-content: center; box-shadow: 0 10px 40px rgba(99, 102, 241, 0.3);'>
-            <span style='font-size: 32px;'>✨</span>
+        <div style='background: linear-gradient(135deg, #6366F1 0%, #4F46E5 100%); width: 50px; height: 50px; border-radius: 14px; display: flex; align-items: center; justify-content: center; box-shadow: 0 8px 30px rgba(99, 102, 241, 0.2);'>
+            <span style='font-size: 28px;'>✨</span>
         </div>
         <div>
-            <h1 style='font-family: "Outfit"; font-weight: 800; color: white; margin: 0; font-size: 2.5rem; letter-spacing: -0.5px;'>
-                DataMind <span style='color: #6366F1; font-size: 2rem;'>SaaS</span>
+            <h1 style='font-family: "Outfit"; font-weight: 800; color: white; margin: 0; font-size: 2rem; letter-spacing: -0.5px;'>
+                DataMind <span style='color: #6366F1; font-size: 1.6rem;'>SaaS</span>
             </h1>
-            <p style='color: #94A3B8; margin: 0.5rem 0 0 0; font-size: 1rem; font-weight: 400;'>Advanced analytics workspace for modern data teams</p>
+            <p style='color: #94A3B8; margin: 0.25rem 0 0 0; font-size: 0.9rem; font-weight: 400;'>Advanced analytics workspace for modern data teams</p>
         </div>
     </div>
 </div>
@@ -66,16 +66,16 @@ with st.sidebar:
     )
     st.session_state["nav_view"] = nav_selection
 
-    # Bottom Section - Premium Spacing
+    # Bottom Section - Integrated Utilities
     st.markdown("<div style='margin-top: auto;'></div>", unsafe_allow_html=True)
+    st.markdown("<div style='height: 1px; background: rgba(255,255,255,0.08); margin: 1.5rem 0;'></div>", unsafe_allow_html=True)
 
-    st.markdown("<div style='height: 1px; background: rgba(255,255,255,0.08); margin: 2rem 0;'></div>", unsafe_allow_html=True)
-
-    col_bot = st.columns(2)
-    with col_bot[0]:
-        if st.button("🔄 Sync", use_container_width=True, help="Sync workspace data"):
+    # Horizontal Action Bar
+    col_bot1, col_bot2 = st.columns(2)
+    with col_bot1:
+        if st.button("🔄 Refresh", use_container_width=True, help="Refresh workspace"):
             st.rerun()
-    with col_bot[1]:
+    with col_bot2:
         if st.button("🗑️ Reset", use_container_width=True, type="secondary", help="Reset session"):
             from datamind.memory.session import initialize_session_state
             st.session_state.clear()

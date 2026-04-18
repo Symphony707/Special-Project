@@ -80,7 +80,19 @@ def render_right_panel():
             add_chat_message("user", final_query)
             
             # Step 2: Handle response pipeline
-            handle_chat_query(final_query, user["id"] if user else 0, st.session_state["current_file_id"], df, fingerprint)
+            from datamind.security.authorizer import SecurityError
+            from datamind.security.error_handler import SafeErrorHandler
+            
+            try:
+                # Add Authorizer test early to fail fast before doing analysis
+                user_id = user["id"] if user else 0
+                handle_chat_query(final_query, user_id, st.session_state["current_file_id"], df, fingerprint)
+            except SecurityError as e:
+                SafeErrorHandler.handle(e, context="permission", user_id=user["id"] if user else None)
+                st.session_state.pop("pending_agent_call", None)
+            except Exception as e:
+                SafeErrorHandler.handle(e, context="agent", user_id=user["id"] if user else None)
+                st.session_state.pop("pending_agent_call", None)
             
             st.session_state["chat_in_flight"] = False
             st.rerun()
@@ -115,6 +127,16 @@ def render_right_panel():
 
 def handle_chat_query(query: str, user_id: int, file_id: int, df: Any, fingerprint: Dict):
     """Tiered Response Pipeline."""
+    from datamind.security.rate_limiter import RateLimiter
+    from datamind.security.authorizer import Authorizer
+
+    Authorizer.assert_file_access(user_id, file_id)
+    
+    rate_result = RateLimiter.check_chat(user_id)
+    if not rate_result["allowed"]:
+        st.warning(rate_result["message"])
+        return
+
     start_time = time.time()
     cache = st.session_state.get("query_cache")
     
@@ -220,16 +242,30 @@ def _process_tier3_agent(agent_data: Dict):
     lab = agent_data["lab"]
     cls = agent_data["classification"]
     
+    user_id = st.session_state.get("current_user", {}).get("id")
+    file_id = st.session_state.get("current_file_id")
+
+    from datamind.security.authorizer import Authorizer, SecurityError
+    from datamind.security.error_handler import SafeErrorHandler
+
     with st.spinner("Executing Deep Analysis..."):
-        orch = Orchestrator()
-        res = orch.route_query(
-            query=query,
-            fingerprint=st.session_state.get("schema_fingerprint"),
-            file_id=st.session_state.get("current_file_id"),
-            intent_override=cls.get("intent")
-        )
-        
-        latency = int((time.time() - start_time) * 1000)
+        try:
+            Authorizer.assert_file_access(user_id, file_id)
+            orch = Orchestrator()
+            res = orch.route_query(
+                query=query,
+                fingerprint=st.session_state.get("schema_fingerprint"),
+                file_id=file_id,
+                intent_override=cls.get("intent")
+            )
+            
+            latency = int((time.time() - start_time) * 1000)
+        except SecurityError as e:
+            SafeErrorHandler.handle(e, context="permission", user_id=user_id)
+            return
+        except Exception as e:
+            SafeErrorHandler.handle(e, context="agent", user_id=user_id)
+            return
         
         if res.get("success"):
             add_chat_message(

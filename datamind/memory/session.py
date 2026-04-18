@@ -37,6 +37,9 @@ def initialize_session_state() -> None:
 
 def activate_data_asset(file_id: int, user_id: int) -> bool:
     """Activates a past analytical asset by loading from disk and applying cache."""
+    from datamind.security.authorizer import Authorizer
+    Authorizer.assert_file_access(user_id, file_id)
+
     # 1. Fetch metadata
     files = db.get_user_files(user_id)
     file_meta = next((f for f in files if f['global_file_id'] == file_id), None)
@@ -88,14 +91,28 @@ def handle_file_upload(uploaded_file, user_id: int):
     if not uploaded_file:
         return None
 
+    if user_id:
+        from datamind.security.rate_limiter import RateLimiter
+        rate_result = RateLimiter.check_file_upload(user_id)
+        if not rate_result["allowed"]:
+            import streamlit as st
+            st.error(rate_result["message"])
+            return None
+
+    from datamind.security.sanitizer import InputSanitizer
+    safe_name = InputSanitizer.sanitize_filename(uploaded_file.name)
+
     # 1. Read bytes for hashing
     file_bytes = uploaded_file.getvalue()
     file_hash = hashlib.sha256(file_bytes).hexdigest()
     
     # 2. Universal Loading (Ingestion Guards)
-    df = UniversalFileLoader.load(file_bytes, uploaded_file.name)
+    df = UniversalFileLoader.load(file_bytes, safe_name)
     if df is None:
         return None
+
+    df, col_mapping = InputSanitizer.sanitize_column_names(df)
+    st.session_state["col_mapping"] = col_mapping
 
     # 3. Generate Fingerprint & Mask PII
     fingerprint = UniversalFileLoader.generate_fingerprint(df)
@@ -104,7 +121,7 @@ def handle_file_upload(uploaded_file, user_id: int):
     # 4. Global Registration (Deduplication)
     file_id = db.insert_global_file(
         file_hash=file_hash,
-        filename=uploaded_file.name,
+        filename=safe_name,
         fingerprint_json=json.dumps(safe_fingerprint),
         row_count=len(df),
         col_count=len(df.columns),
@@ -113,7 +130,7 @@ def handle_file_upload(uploaded_file, user_id: int):
 
     # 5. Map User to File
     if user_id is not None:
-        db.create_user_file_ref(user_id, file_id, uploaded_file.name)
+        db.create_user_file_ref(user_id, file_id, safe_name)
     
     # 5b. Persist to Disk if not present
     file_path = os.path.join(UPLOADS_DIR, file_hash)
@@ -124,7 +141,7 @@ def handle_file_upload(uploaded_file, user_id: int):
     # 6. Set Session Context
     st.session_state["df"] = df
     st.session_state["current_file_id"] = file_id
-    st.session_state["current_file_name"] = uploaded_file.name
+    st.session_state["current_file_name"] = safe_name
     st.session_state["schema_fingerprint"] = safe_fingerprint
     st.session_state["chat_history"] = []
     st.session_state["summary_text"] = None

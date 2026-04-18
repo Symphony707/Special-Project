@@ -183,7 +183,17 @@ def main():
         st.session_state["session_initialized"] = True
 
     # 7. Render main app
-    render_main_app(user)
+    from datamind.security.authorizer import SecurityError
+    from datamind.security.error_handler import SafeErrorHandler
+    
+    try:
+        render_main_app(user)
+    except SecurityError as e:
+        SafeErrorHandler.handle(e, 'permission', user.get("id"))
+        st.stop()
+    except Exception as e:
+        SafeErrorHandler.handle(e, 'generic', user.get("id"))
+        st.stop()
 
 if __name__ == "__main__":
     main()

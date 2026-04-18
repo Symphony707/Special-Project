@@ -32,10 +32,16 @@ class UniversalFileLoader:
     @staticmethod
     def load(file_bytes: bytes, file_name: str) -> Optional[pd.DataFrame]:
         """Load file bytes into a DataFrame with safety checks."""
-        # 1. Size Check
-        size_mb = len(file_bytes) / (1024 * 1024)
-        if size_mb > MAX_FILE_SIZE_MB:
-            st.error(f"❌ File size ({size_mb:.1f}MB) exceeds the {MAX_FILE_SIZE_MB}MB limit.")
+        from datamind.security.upload_guard import UploadGuard
+        guard_result = UploadGuard.validate_before_read(file_bytes, file_name)
+        if not guard_result["safe"]:
+            import logging
+            logging.error(f"UploadGuard rejected file {file_name}: {guard_result['error']}")
+            from database import log_event
+            # Try to log if session exists
+            if hasattr(st.session_state, 'current_user') and st.session_state.current_user:
+                log_event(st.session_state.current_user['id'], 'invalid_file_type', guard_result['error'])
+            st.error(f"❌ {guard_result['error']}")
             st.stop()
             return None
 
@@ -61,10 +67,16 @@ class UniversalFileLoader:
             return None
 
         if df is not None:
-            # 2. Row Count Check
-            if len(df) > MAX_ROWS:
-                st.warning(f"⚠️ Dataset exceeds {MAX_ROWS:,} rows. Truncating for performance.")
-                df = df.head(MAX_ROWS)
+            guard_result = UploadGuard.validate_after_read(df, file_name)
+            if not guard_result["safe"]:
+                import logging
+                logging.error(f"UploadGuard rejected parsed file {file_name}: {guard_result['error']}")
+                from database import log_event
+                if hasattr(st.session_state, 'current_user') and st.session_state.current_user:
+                    log_event(st.session_state.current_user['id'], 'file_bomb_detected', guard_result['error'])
+                st.error(f"❌ {guard_result['error']}")
+                st.stop()
+                return None
             
             # 3. Data Coercion
             df = UniversalFileLoader._run_data_coercer(df)

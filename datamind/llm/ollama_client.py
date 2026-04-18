@@ -63,6 +63,35 @@ class OllamaClient:
         Returns:
             The assistant's reply text.
         """
+        from datamind.security.prompt_guard import PromptGuard
+        from datamind.security.rate_limiter import RateLimiter
+        import streamlit as st
+        import logging
+
+        # Rate Limiting
+        if hasattr(st, 'session_state') and 'current_user' in st.session_state and st.session_state.current_user:
+            user_id = st.session_state.current_user['id']
+            if user_id:
+                rate_result = RateLimiter.check_ollama(user_id)
+                if not rate_result["allowed"]:
+                    return rate_result["message"]
+        
+        # PromptGuard Injection Scan
+        secured_messages = []
+        for msg in messages:
+            if msg["role"] == "user":
+                scan_res = PromptGuard.scan_for_injection(msg["content"])
+                if scan_res["threat_level"] == "high":
+                    logging.warning(f"HIGH RISK prompt injection blocked: {msg['content'][:100]}")
+                    return "I cannot process this request."
+                secured_messages.append({"role": "user", "content": scan_res["filtered_text"]})
+            elif msg["role"] == "system":
+                secured_messages.append({"role": "system", "content": PromptGuard.wrap_system_prompt(msg["content"])})
+            else:
+                secured_messages.append(msg)
+        
+        messages = secured_messages
+
         if stream:
             chunks = list(self.stream_chat(messages, temperature=temperature, options=options))
             return "".join(chunks)
@@ -102,6 +131,37 @@ class OllamaClient:
         Yields:
             Successive content chunks from the assistant.
         """
+        from datamind.security.prompt_guard import PromptGuard
+        from datamind.security.rate_limiter import RateLimiter
+        import streamlit as st
+        import logging
+
+        # Rate Limiting
+        if hasattr(st, 'session_state') and 'current_user' in st.session_state and st.session_state.current_user:
+            user_id = st.session_state.current_user['id']
+            if user_id:
+                rate_result = RateLimiter.check_ollama(user_id)
+                if not rate_result["allowed"]:
+                    yield rate_result["message"]
+                    return
+        
+        # PromptGuard Injection Scan
+        secured_messages = []
+        for msg in messages:
+            if msg["role"] == "user":
+                scan_res = PromptGuard.scan_for_injection(msg["content"])
+                if scan_res["threat_level"] == "high":
+                    logging.warning(f"HIGH RISK prompt injection blocked: {msg['content'][:100]}")
+                    yield "I cannot process this request."
+                    return
+                secured_messages.append({"role": "user", "content": scan_res["filtered_text"]})
+            elif msg["role"] == "system":
+                secured_messages.append({"role": "system", "content": PromptGuard.wrap_system_prompt(msg["content"])})
+            else:
+                secured_messages.append(msg)
+        
+        messages = secured_messages
+
         payload: dict = {
             "model": self.model,
             "messages": messages,

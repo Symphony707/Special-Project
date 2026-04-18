@@ -105,13 +105,20 @@ class AnalystAgent:
 
     def _build_unsupervised_prompt(self, query: str, history: List[Dict], intel: str) -> str:
         # Optimization: Use high-fidelity condensed schema fingerprint
-        schema_fingerprint = {
-            col: {
+        from datamind.security.prompt_guard import PromptGuard
+        from datamind.security.sanitizer import InputSanitizer
+        
+        schema_fingerprint = {}
+        for col, details in self.stats.column_details.items():
+            safe_samples = [
+                PromptGuard.wrap_user_data(InputSanitizer.sanitize_for_llm(str(val)))
+                for val in details["sample_values"]
+            ]
+            schema_fingerprint[col] = {
                 "type": details["type"], 
                 "uniques": details["unique_count"],
-                "samples": details["sample_values"]
-            } for col, details in self.stats.column_details.items()
-        }
+                "samples": safe_samples
+            }
         
         return rf"""
 Analyze the following dataset context and answer the user's analytical query.

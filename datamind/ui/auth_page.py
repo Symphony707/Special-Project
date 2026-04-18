@@ -126,6 +126,14 @@ def _render_signin_tab():
             st.rerun()
 
         st.session_state["auth_in_flight"] = True
+        
+        from datamind.security.rate_limiter import RateLimiter
+        rate_result = RateLimiter.check_login(email)
+        if not rate_result["allowed"]:
+            st.session_state["auth_in_flight"] = False
+            st.error(rate_result["message"])
+            st.stop()
+            
         with st.spinner("Signing in..."):
             result = auth.login_user(email, password)
         st.session_state["auth_in_flight"] = False
@@ -178,6 +186,14 @@ def _render_register_tab():
                 del st.session_state[key]
 
         st.session_state["auth_in_flight"] = True
+        
+        from datamind.security.rate_limiter import RateLimiter
+        rate_result = RateLimiter.check_register("default")
+        if not rate_result["allowed"]:
+            st.session_state["auth_in_flight"] = False
+            st.error(rate_result["message"])
+            st.stop()
+            
         with st.spinner("Creating account..."):
             result = auth.register_user(username, email, password, confirm)
         st.session_state["auth_in_flight"] = False

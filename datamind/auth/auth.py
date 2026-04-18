@@ -23,9 +23,9 @@ MIN_PASSWORD_LENGTH = 8
 
 # Validation Helpers
 def validate_email(email: str) -> tuple[bool, str]:
-    pattern = r'^[\w.+\-]+@[\w\-]+\.[a-zA-Z]{2,}$'
-    if not re.match(pattern, email.strip()):
-        return False, "Invalid email format"
+    from datamind.security.sanitizer import InputSanitizer
+    if not InputSanitizer.validate_email_safe(email):
+        return False, "Invalid email format or length"
     return True, ""
 
 def validate_username(username: str) -> tuple[bool, str]:
@@ -47,9 +47,11 @@ def hash_token(raw_token: str) -> str:
 
 # Register
 def register_user(username, email, password, confirm_password) -> dict:
-    # Server-side validation
-    email = email.strip().lower()
-    username = username.strip()
+    from datamind.security.sanitizer import InputSanitizer
+    email = InputSanitizer.sanitize_auth_input(email, 'email')
+    username = InputSanitizer.sanitize_auth_input(username, 'username')
+    password = InputSanitizer.sanitize_auth_input(password, 'password')
+    confirm_password = InputSanitizer.sanitize_auth_input(confirm_password, 'password')
 
     ok, err = validate_username(username)
     if not ok: return {"success": False, "field": "username", "error": err}
@@ -97,7 +99,9 @@ def register_user(username, email, password, confirm_password) -> dict:
 
 # Login
 def login_user(email, password) -> dict:
-    email = email.strip().lower()
+    from datamind.security.sanitizer import InputSanitizer
+    email = InputSanitizer.sanitize_auth_input(email, 'email')
+    password = InputSanitizer.sanitize_auth_input(password, 'password')
 
     # Check lockout BEFORE DB user fetch
     lockout = db.get_lockout_status(email)

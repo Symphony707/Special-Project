@@ -2,7 +2,6 @@
 maxUploadSize = 50
 enableXsrfProtection = true
 headless = true
-headless = true
 
 [browser]
 gatherUsageStats = false

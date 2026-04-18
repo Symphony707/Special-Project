@@ -37,3 +37,50 @@ tmp/
 *.xls
 *.parquet
 datamind/data/
+
+# ── Environment & Secrets ──
+.env.local
+.env.*.local
+*.secret
+secrets.toml
+
+# ── Database files ──
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+
+# ── User uploaded data ──
+data/
+uploads/
+**/uploads/
+
+# ── Generated artifacts ──
+artifacts/
+scratch/
+
+# ── Python cache (extras) ──
+*$py.class
+*.pyo
+.pytest_cache/
+.mypy_cache/
+
+# ── Data files that may contain real data (extras) ──
+!.env.example
+!requirements.txt
+!README.md
+
+# ── OS files (extras) ──
+.DS_Store?
+._*
+ehthumbs.db
+
+# ── IDE (extras) ──
+.vscode/settings.json
+*.swo
+
+# ── Streamlit ──
+.streamlit/secrets.toml
+
+# ── Build (extras) ──
+*.egg-info/

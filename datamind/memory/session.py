@@ -95,7 +95,6 @@ def handle_file_upload(uploaded_file, user_id: int):
         from datamind.security.rate_limiter import RateLimiter
         rate_result = RateLimiter.check_file_upload(user_id)
         if not rate_result["allowed"]:
-            import streamlit as st
             st.error(rate_result["message"])
             return None
 

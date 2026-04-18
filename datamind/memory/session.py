@@ -4,6 +4,7 @@ Manages user-scoped state, file deduplication, and database synchronization with
 """
 
 import os
+import re
 import json
 import hashlib
 import logging

@@ -1,15 +1,14 @@
 """UI components for DataMind v4.0."""
 
-from .layout import (
-    create_split_layout,
+from datamind.ui.layout import (
     apply_custom_styles,
+    create_split_layout,
     render_left_panel_metrics,
     render_summary_section,
-    render_chat_interface,
+    render_main_stage_artifacts,
 )
-
-from .left_panel import render_left_panel
-from .right_panel import render_right_panel
+from datamind.ui.left_panel import render_left_panel
+from datamind.ui.right_panel import render_right_panel
 
 __all__ = [
     "create_split_layout",

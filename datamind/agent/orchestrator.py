@@ -1,153 +1,174 @@
 """
-Orchestrator for DataMind v4.0
-Coordinates routing between specialized agents and implements feasibility gates.
+Orchestrator for DataMind v4.0.
+Master router for multi-agent intelligence routing and intent classification.
 """
 
+from __future__ import annotations
 import logging
 import re
-import streamlit as st
-from typing import Any, Dict, Optional
+import difflib
+from typing import Any, Dict, Optional, List, Tuple
 
 import pandas as pd
+import streamlit as st
+
 from datamind.agent.summary_agent import SummaryAgent
 from datamind.agent.diagnostic_agent import DiagnosticAgent
 from datamind.agent.viz_agent import VizAgent
 from datamind.agent.predict_agent import PredictAgent
 from datamind.agent.analyst_agent import AnalystAgent
 from datamind.agent.cleaning_agent import CleaningAgent
-from datamind.memory.session import get_dataframe, get_summary_text
+from datamind.memory.session import get_dataframe, get_summary_text, get_chat_history
 from datamind.tools.stats import compute_fast_stats, DatasetStats
 from datamind.llm.ollama_client import OllamaClient
-from datamind.config import OLLAMA_BASE_URL, OLLAMA_MODEL
+from config import OLLAMA_BASE_URL, OLLAMA_MODEL
 
 logger = logging.getLogger(__name__)
 
 class Orchestrator:
-    """Master router for agent orchestration."""
+    """Master Intelligence Router."""
 
-    def __init__(
-        self,
-        client: Optional[OllamaClient] = None,
-        model: str = OLLAMA_MODEL,
-        base_url: str = OLLAMA_BASE_URL
-    ):
-        self.client = client or OllamaClient(model=model, base_url=base_url)
+    def __init__(self, client: Optional[OllamaClient] = None):
+        self.client = client or OllamaClient()
         self.df = get_dataframe()
-        self.stats: Optional[DatasetStats] = compute_fast_stats(self.df) if self.df is not None else None
+        self.stats = compute_fast_stats(self.df) if self.df is not None else None
 
-    def route_request(self, user_request: str) -> Dict[str, Any]:
-        """Route user requests to the appropriate specialized agent."""
+    def route_query(self, query: str, fingerprint: Dict[str, Any] = None, file_id: Optional[int] = None, intent_override: Optional[str] = None) -> Dict[str, Any]:
+        """Classifies intent and routes to the optimal specialized agent."""
         if self.df is None:
-            return {"response": "Please upload a dataset on the left to begin.", "charts": []}
+            return {"success": False, "response": "No data active. Please upload a dataset first."}
 
-        req = user_request.lower()
-
-        # 1. Summary Requests
-        if any(x in req for x in ["summary", "profile", "overview"]):
-            agent = SummaryAgent(client=self.client)
-            dossier = agent.summarize_dossier(self.df)
-            return {"response": dossier["text"], "charts": dossier["figures"]}
-
-        # 2. Prediction / Forecast Requests (Gated by Diagnostic)
-        if any(x in req for x in ["predict", "forecast", "regression", "classification"]):
-            mode = "forecast" if "forecast" in req else "predict"
-            target = self._extract_target(req)
+        # 1. Intent Classification (Keyword Based with Override)
+        intent = intent_override.upper() if intent_override else self._classify_intent(query)
+        
+        # 2. Query Normalization (Fuzzy Column Mapping)
+        normalized_query, target_col = self._normalize_and_extract_target(query)
+        
+        # 3. Context Package Construction
+        history = get_chat_history()
+        
+        # 4. Routing
+        if intent == "VISUALIZATION":
+            agent = VizAgent(self.df, self.stats)
+            viz_type = "correlation" if "correlation" in normalized_query or "heatmap" in normalized_query else "distribution"
+            fig = agent.handle_request(viz_type, column=target_col)
             
-            diagnostic = DiagnosticAgent(self.stats)
-            check = diagnostic.check_feasibility(mode, target)
-            
-            if not check["approved"]:
+            if fig:
                 return {
-                    "response": f"### ⚠️ {check['message']}\n\n{check['suggestion']}",
-                    "charts": []
+                    "success": True, 
+                    "response": f"Generated {viz_type} visualization for {target_col if target_col else 'the request'}.", 
+                    "figures": [fig],
+                    "category": "analysis"
+                }
+            else:
+                return {
+                    "success": True, # Still success as the agent processed it
+                    "response": f"I analyzed the data but couldn't identify the right numeric column to build a {viz_type} chart. Could you specify the column name?",
+                    "figures": [],
+                    "category": "analysis"
+                }
+
+        elif intent == "PREDICTION":
+            # 1. Distinguish between 'Hard ML' and 'Strategic Simulation'
+            simulation_keywords = [
+                "how", "increase", "decrease", "what-if", "what happens", "should", "simulate", 
+                "if we", "growth", "scenario", "loss", "months", "years", "days", "impact", 
+                "change", "effect", "reduction", "drop", "surge", "%"
+            ]
+            normalized_q_low = normalized_query.lower()
+            is_simulation = any(x in normalized_q_low for x in simulation_keywords)
+            
+            # Heuristic for scenario modeling: (e.g. "predict 10% change")
+            if not is_simulation:
+                # Detect percentage patterns or temporal units
+                if re.search(r'\d+%', normalized_q_low) or any(x in normalized_q_low for x in ["month", "year", "day", "week"]):
+                    is_simulation = True
+            
+            if is_simulation:
+                # Route to SummaryAgent's Strategic Forecasting Engine
+                agent = SummaryAgent(client=self.client)
+                res = agent.generate_predictions(self.df)
+                return {
+                    "success": True,
+                    "response": res["response"],
+                    "lab_narrative": res["lab_narrative"],
+                    "category": "simulation",
+                    "figures": res.get("figures", []) or ([res["fig"]] if res.get("fig") else [])
                 }
             
+            # 2. Hard ML Mission
             agent = PredictAgent(self.df, self.stats)
-            res = agent.predict(target, mode=mode)
-            return {"response": res.get("response", ""), "charts": res.get("charts", [])}
-
-        # 3. Viz Requests
-        if any(x in req for x in ["chart", "plot", "graph", "histogram", "heatmap"]):
-            agent = VizAgent(self.df, self.stats)
-            # Basic routing for viz
-            if "heatmap" in req or "correlation" in req:
-                fig = agent.handle_request("correlation")
-            elif "null" in req or "missing" in req:
-                fig = agent.handle_request("missing")
-            else:
-                target = self._extract_target(req)
-                fig = agent.handle_request("distribution", column=target)
+            # Determine mode based on keywords
+            mode = "auto"
+            if "cluster" in normalized_query: mode = "clustering"
+            elif "forecast" in normalized_query: mode = "timeseries"
+            elif "classify" in normalized_query or "classification" in normalized_query: mode = "classification"
+            elif "regress" in normalized_query or "price" in normalized_query: mode = "regression"
             
+            return agent.run_prediction_mission(target_col=target_col, mode=mode)
+
+        elif intent == "SUMMARY":
+            agent = SummaryAgent(client=self.client)
+            dossier = agent.summarize_dossier(self.df)
             return {
-                "response": "Here is the requested visualization:",
-                "charts": [fig] if fig else []
+                "success": True, 
+                "response": dossier["response"], 
+                "lab_narrative": dossier["lab_narrative"],
+                "figures": dossier.get("figures", []),
+                "category": "analysis"
             }
 
-        # 4. Cleaning / Audit Requests
-        if any(x in req for x in ["clean", "fix", "audit", "duplicates", "nulls", "missing"]):
+        elif intent == "CLEANING":
             agent = CleaningAgent(self.df, self.client)
-            if any(x in req for x in ["fix", "apply", "automatic"]):
+            if any(x in normalized_query for x in ["fix", "apply", "automatic"]):
                 res = agent.apply_auto_clean()
-                return {"response": res["response"], "charts": []}
-            return {"response": agent.suggest_cleaning_plan(), "charts": []}
+                return {"success": True, "response": res["response"], "category": "analysis"}
+            return {"success": True, "response": agent.suggest_cleaning_plan(), "category": "analysis"}
 
-        # 5. Default: Deep Analyst Agent (NL to Code)
-        file_name = st.session_state.get("current_file_name", "global")
-        agent = AnalystAgent(self.df, self.client, dataset_name=file_name)
-        res = agent.analyze(user_request)
-        return res
+        # DEFAULT: Analysis (Universal Reasoning)
+        agent = AnalystAgent(
+            df=self.df, 
+            client=self.client, 
+            file_id=file_id, 
+            fingerprint=fingerprint
+        )
+        return agent.analyze(query, conversation_history=history)
 
-    def _extract_target(self, text: str) -> Optional[str]:
-        """Extract column target from request text with aggressive semantic matching."""
-        import difflib
-        if self.df is None: return None
+    def _classify_intent(self, query: str) -> str:
+        """Determines the primary analytical intent."""
+        q = query.upper()
+        if any(x in q for x in ["CHART", "PLOT", "GRAPH", "VISUALIZ", "HISTOGRAM", "HEATMAP", "SCATTER", "MAP"]):
+            return "VISUALIZATION"
+        if any(x in q for x in ["PREDICT", "FORECAST", "SIMULAT", "FUTURE", "MODEL", "CLUSTER", "KMEANS", "REGRESSION", "ML", "MACHINE LEARNING", "TRAIN", "TEST", "WHAT-IF", "WHAT HAPPENS", "INCREASE", "DECREASE", "GROWTH", "IMPACT"]):
+            return "PREDICTION"
+        if any(x in q for x in ["SUMMARY", "OVERVIEW", "PROFILE", "TELL ME ABOUT", "DESCRIBE", "EXPLAIN"]):
+            return "SUMMARY"
+        if any(x in q for x in ["CLEAN", "FIX", "NULL", "MISSING", "DUPLICATE", "AUDIT", "WASH"]):
+            return "CLEANING"
+        return "ANALYSIS"
+
+    def _normalize_and_extract_target(self, query: str) -> Tuple[str, Optional[str]]:
+        """Finds the most likely target column and normalizes the query."""
+        if self.df is None: return query, None
         
-        all_cols = self.df.columns.tolist()
-        lower_cols = [c.lower() for c in all_cols]
-        text_lower = text.lower()
+        words = re.findall(r'\w+', query.lower())
+        target = None
+        normalized_query = query
         
-        # 1. First, check if any column name is explicitly in the text
-        for i, c in enumerate(lower_cols):
-            if c in text_lower:
-                return all_cols[i]
+        # Priority 1: Exact Match
+        for col in self.df.columns:
+            if col.lower() in words:
+                target = col
+                break
         
-        # 2. Tokenize and check for plurals or typos
-        tokens = re.findall(r'\w+', text_lower)
-        for token in tokens:
-            # Handle common pluralization by a simple 's' strip
-            normalized = token[:-1] if token.endswith('s') else token
-            
-            # Exact match on normalized token
-            if normalized in lower_cols:
-                return all_cols[lower_cols.index(normalized)]
-                
-            # Fuzzy match on token
-            matches = difflib.get_close_matches(token, lower_cols, n=1, cutoff=0.7)
-            if matches:
-                return all_cols[lower_cols.index(matches[0])]
-                
-            # Fuzzy match on normalized token
-            matches = difflib.get_close_matches(normalized, lower_cols, n=1, cutoff=0.7)
-            if matches:
-                return all_cols[lower_cols.index(matches[0])]
-
-        # 3. Fallback to the original regex if no eager match found
-        match = re.search(r"(?:predict|for|on|of|column|about)\s+([a-zA-Z0-9_\s]+)", text_lower)
-        if match:
-            candidate = match.group(1).strip()
-            matches = difflib.get_close_matches(candidate, lower_cols, n=1, cutoff=0.6)
-            if matches:
-                 return all_cols[lower_cols.index(matches[0])]
-
-        return None
-
-    def _handle_general_query(self, query: str) -> Dict[str, Any]:
-        """Fallback to LLM for general data questions."""
-        summary = get_summary_text() or "No summary available."
-        prompt = f"User is asking about their dataset. Summary: {summary}\nUser Query: {query}\nProvide a concise analysis."
+        # Priority 2: Fuzzy Match
+        if not target:
+            for word in words:
+                if len(word) < 4: continue
+                matches = difflib.get_close_matches(word, self.df.columns, n=1, cutoff=0.7)
+                if matches:
+                    target = matches[0]
+                    normalized_query = normalized_query.replace(word, target)
+                    break
         
-        try:
-            resp = self.client.chat([{"role": "user", "content": prompt}])
-            return {"response": resp, "charts": []}
-        except:
-            return {"response": "I'm not sure how to handle that request. Try asking for a 'summary' or 'predict [column]'.", "charts": []}
+        return normalized_query, target

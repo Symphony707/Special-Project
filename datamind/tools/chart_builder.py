@@ -25,12 +25,10 @@ CHART_THEME = {
     "yaxis": {"gridcolor": "rgba(255,255,255,0.05)", "zerolinecolor": "rgba(255,255,255,0.1)"},
 }
 
-def build_distribution_chart(df: pd.DataFrame, column: str) -> Figure:
+def build_distribution_chart(df: pd.DataFrame, column: str) -> Optional[Figure]:
     """Builds histogram or bar chart based on column type."""
     if column not in df.columns:
-        fig = go.Figure()
-        fig.add_annotation(text=f"Column {column} not found", showarrow=False)
-        return fig
+        return None
 
     if pd.api.types.is_numeric_dtype(df[column]):
         fig = px.histogram(
@@ -64,7 +62,7 @@ def build_correlation_heatmap(df: pd.DataFrame) -> Optional[Figure]:
         colorscale="RdBu",
         zmin=-1, zmax=1,
         text=corr.round(2).values,
-        textauto=True
+        texttemplate="%{text}"
     ))
     
     fig.update_layout(
@@ -138,8 +136,10 @@ def build_residual_plot(y_true: Union[List, np.ndarray], y_pred: Union[List, np.
     fig.update_layout(**CHART_THEME)
     return fig
 
-def build_time_series_chart(df: pd.DataFrame, date_col: str, value_col: str) -> Figure:
+def build_time_series_chart(df: pd.DataFrame, date_col: str, value_col: str) -> Optional[Figure]:
     """Builds a standard time-series line chart for a dataframe."""
+    if date_col not in df.columns or value_col not in df.columns:
+        return None
     fig = px.line(
         df.sort_values(date_col), 
         x=date_col, y=value_col,

@@ -18,8 +18,8 @@ from typing import Any, Dict, List, Optional
 import streamlit as st  # type: ignore[import-untyped]
 import pandas as pd  # type: ignore[import-untyped]
 
-from datamind.memory.session import get_dataframe, get_session_state
-from datamind.config import OLLAMA_BASE_URL, OLLAMA_MODEL
+from datamind.memory.session import get_dataframe
+from config import OLLAMA_BASE_URL, OLLAMA_MODEL
 
 # Path for feedback storage
 FEEDBACK_DIR = os.path.join(os.path.dirname(__file__), "..", "feedback_data")

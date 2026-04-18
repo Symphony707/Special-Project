@@ -10,6 +10,7 @@ import time
 from typing import Generator, Optional
 
 import requests
+from config import OLLAMA_TIMEOUT
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +33,7 @@ class OllamaClient:
         base_url: str = "http://localhost:11434",
         model: str = "qwen2.5-coder:1.5b",
         max_retries: int = 3,
-        timeout: int = 180,
+        timeout: int = OLLAMA_TIMEOUT,
     ):
         self.base_url = base_url.rstrip("/")
         self.model = model

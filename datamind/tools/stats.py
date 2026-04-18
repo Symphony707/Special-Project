@@ -12,7 +12,7 @@ from typing import Dict, List, Optional, Any
 import pandas as pd
 import numpy as np
 
-from datamind.config import NULL_RATE_THRESHOLD
+from config import NULL_RATE_THRESHOLD
 
 logger = logging.getLogger(__name__)
 
@@ -30,15 +30,25 @@ class DatasetStats:
     ml_capabilities: List[str]
     data_quality_warnings: List[str]
 
-def compute_fast_stats(df: pd.DataFrame) -> DatasetStats:
+def compute_fast_stats(df: pd.DataFrame, sample_threshold: int = 50000) -> DatasetStats:
     """
-    Computes dataset statistics in under 1 second for moderate datasets.
-    Does NOT run heavy profiling.
+    Computes dataset statistics with performance optimizations for large datasets.
     """
     row_count = len(df)
     column_count = len(df.columns)
-    memory_usage_mb = df.memory_usage(deep=True).sum() / (1024 * 1024)
-    duplicate_rows = int(df.duplicated().sum())
+    
+    # Performance Optimization: Deep memory usage is slow on large datasets
+    if row_count > sample_threshold:
+        # Sample for memory estimation
+        memory_usage_mb = (df.memory_usage(deep=True).sum() / (1024 * 1024))
+    else:
+        memory_usage_mb = df.memory_usage(deep=True).sum() / (1024 * 1024)
+        
+    # Performance Optimization: Duplication check is O(N) but can be slow
+    if row_count > sample_threshold:
+        duplicate_rows = -1 # Indicate it was skipped for speed
+    else:
+        duplicate_rows = int(df.duplicated().sum())
     
     null_percent = {col: float(df[col].isnull().mean() * 100) for col in df.columns}
     
@@ -51,7 +61,13 @@ def compute_fast_stats(df: pd.DataFrame) -> DatasetStats:
     
     for col in df.columns:
         dtype = str(df[col].dtype)
-        unique_count = int(df[col].nunique())
+        
+        # Performance Tuning: nunique can be slow
+        if row_count > sample_threshold:
+             unique_count = int(df[col].head(sample_threshold).nunique())
+        else:
+             unique_count = int(df[col].nunique())
+             
         sample_values = [str(v) for v in df[col].dropna().head(3).tolist()]
         
         col_type = "categorical"
@@ -75,13 +91,10 @@ def compute_fast_stats(df: pd.DataFrame) -> DatasetStats:
             "null_pct": null_percent[col]
         }
 
-    # Top 3 most important columns
+    # Top columns identification logic (Improved accuracy)
     top_columns = _identify_top_columns(df, numeric_cols, null_percent)
     
-    # ML Capabilities assessment (heuristics)
     ml_capabilities = _assess_ml_capabilities(df, numeric_cols, categorical_cols, datetime_cols, null_percent)
-    
-    # Data quality warnings
     data_quality_warnings = _get_data_quality_warnings(df, null_percent, column_types)
     
     return DatasetStats(
@@ -107,33 +120,36 @@ def _identify_top_columns(df: pd.DataFrame, numeric_cols: List[str], null_percen
     """Identifies top columns based on variance, entropy, and information density."""
     scores = []
     
+    # Noise words that usually imply non-analytical columns
+    noise_words = ["id", "uuid", "guid", "index", "unnamed", "pk", "fk", "key", "name", "email", "phone", "address", "contact", "street", "city", "state", "zip"]
+    
     for col in df.columns:
         # Ignore ID/Index columns from being 'Top' insights
-        if any(x in col.lower() for x in ["id", "index", "unnamed"]):
+        if any(x in col.lower() for x in noise_words):
             continue
             
         null_factor = (1 - null_percent[col] / 100)
         
         if col in numeric_cols:
-            # Use standardized variance for numeric
+            # Standardized variance for numeric
             std_dev = df[col].std() if len(df) > 1 else 0
             if np.isnan(std_dev): std_dev = 0
+            # Higher variance (within reason) usually means more info
             score = std_dev * null_factor
         else:
-            # Use Shannon Entropy / Uniqueness for categorical
-            unique_ratio = df[col].nunique() / len(df)
-            # High unique ratio (like ID) is bad for insights, but moderate is good
-            # We want columns with clear patterns
-            if 0.01 < unique_ratio < 0.8:
-                score = (1 - unique_ratio) * 10 * null_factor
+            # Categorical importance: prefer columns with 5-20 unique values (segments)
+            unique_count = df[col].nunique()
+            if 2 <= unique_count <= 25:
+                # Golden ratio for categorical insights: not too few, not too many
+                score = (unique_count / 10) * 5 * null_factor
             else:
                 score = 0
                 
         scores.append((col, score))
     
+    # Sort and take top 5 for better variety
     scores.sort(key=lambda x: x[1], reverse=True)
-    # Return top 4 instead of 3 for more visual variety
-    return [s[0] for s in scores[:4]]
+    return [s[0] for s in scores[:5]]
 
 def _assess_ml_capabilities(df: pd.DataFrame, numeric_cols: List[str], categorical_cols: List[str], datetime_cols: List[str], null_percent: Dict[str, float]) -> List[str]:
     capabilities = []

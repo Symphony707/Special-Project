@@ -1,10 +1,10 @@
 """Agent modules for DataMind v4.0's autonomous analysis pipeline."""
 
-from .summary_agent import SummaryAgent
-from .diagnostic_agent import DiagnosticAgent
-from .viz_agent import VizAgent
-from .predict_agent import PredictAgent
-from .orchestrator import Orchestrator
+from datamind.agent.summary_agent import SummaryAgent
+from datamind.agent.diagnostic_agent import DiagnosticAgent
+from datamind.agent.viz_agent import VizAgent
+from datamind.agent.predict_agent import PredictAgent
+from datamind.agent.orchestrator import Orchestrator
 
 __all__ = [
     "SummaryAgent",

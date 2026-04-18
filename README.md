@@ -1,58 +1,69 @@
-# 🧠 DataMind SaaS — Advanced Analytics Workspace
+# DataMind SaaS
 
-**DataMind** is a high-fidelity intelligence platform designed to transform raw datasets into strategic business insights using autonomous analytical agents. It provides a premium, responsive environment for deep-dive forensic analysis and predictive simulations.
+## Overview
+DataMind SaaS is a forensic intelligence platform that provides deep dataset profiling, interactive visual analytics, and strategic forecasting. Designed for analysts and executives, it combines automated machine learning with robust language models to turn raw data into strategic narratives.
 
-## ✨ Platform Laboratories
+## Tech Stack
+| Layer | Technology |
+|---|---|
+| **Frontend** | Streamlit, Plotly |
+| **Backend** | Python, Scikit-Learn, Pandas |
+| **Database** | SQLite, bcrypt |
+| **LLM Engine** | Ollama (Qwen 2.5 Coder) |
 
-### 📐 Analysis Laboratory
-Deep-dive forensic analysis and statistical reasoning. The Analysis Lab provides narrative-driven insights and interactive data diagnostics to uncover hidden patterns in your datasets.
+## Setup
+### Prerequisites
+- Python 3.10+
+- Ollama installed and running
+- Model pulled: `ollama pull qwen2.5-coder:7b`
 
-### 🔬 Prediction Laboratory
-Strategic forecasting and business impact simulations. Use the Prediction Lab to model future scenarios, perform trend analysis, and visualize potential outcomes.
+### Installation
+```bash
+git clone <repo>
+cd <project>
+pip install -r requirements.txt
+cp .env.example .env
+# Edit .env with your values
+streamlit run app.py
+```
 
-### 🏠 Unified Dashboard
-A centralized workspace offering real-time visibility into dataset health, automated summaries, and architectural metrics.
+## Environment Variables
+See `.env.example` for required variables. Note: Never commit `.env` to version control.
 
-### 📁 Data Manager
-Multi-dataset inventory control. Manage your analytical assets with high-fidelity persistence and context switching.
+## Project Structure
+```text
+Special Project/
+├── .streamlit/
+│   └── config.toml
+├── assets/
+│   └── logo.jpg
+├── data/
+│   ├── uploads/
+│   └── datamind.db
+├── datamind/
+│   ├── agent/       # Autonomous analytical agents
+│   ├── auth/        # Multi-tenant security
+│   ├── llm/         # Inference engine connectors
+│   ├── memory/      # Session and caching frameworks
+│   ├── tools/       # Data ingestion and profiling
+│   ├── ui/          # Streamlit views and layouts
+│   └── utils/       # Global helpers
+├── .env.example
+├── .gitignore
+├── app.py
+├── config.py
+├── database.py
+├── pyrightconfig.json
+├── README.md
+└── requirements.txt
+```
 
----
+## Features
+- **Forensic Dataset Profiling**: Instant recognition of missing values, anomalies, and statistics across datasets.
+- **Narrative Reporting**: Autonomous agents provide executive-level breakdown and strategic implications of data patterns.
+- **Predictive Forecasting**: Apply continuous modeling and simulations for what-if scenarios.
+- **Interactive Dashboards**: Seamless chart generation via natural language without coding.
+- **Multi-Tenant Memory**: Persistent session histories and deduplicated file asset ingestion with PII scrubbing. 
 
-## 🚀 Quick Start
-
-1.  **Environment Setup**:
-    Ensure you have Python 3.10+ installed and the required dependencies:
-    ```bash
-    pip install -r requirements.txt
-    ```
-
-2.  **Ollama Intelligence Setup**:
-    This project requires a local Ollama instance for LLM inference.
-    - **Install Ollama**: Follow instructions at [ollama.com](https://ollama.com).
-    - **Pull Model**:
-      ```bash
-      ollama pull qwen2.5-coder:1.5b
-      ```
-    - **Start Server**: Ensure the server is running (`ollama serve`).
-
-3.  **Intelligence Configuration**:
-    Create a `.env` file from the provided example:
-    ```bash
-    cp .env.example .env
-    ```
-    (Optional) Tune configuration values in `.env` if needed.
-
-3.  **Launch Platform**:
-    Run the following command from the project root:
-    ```bash
-    streamlit run app.py
-    ```
-
-## ⚙️ Configuration
-The platform is fully tunable via environment variables. Key configuration areas include:
-- **Engine Selection**: Toggle between different analytical models.
-- **Latency Control**: Adjust execution and diagnostic timeouts.
-- **Precision Thresholds**: Configure null-rate handling and statistical significance levels.
-
----
-© 2026 DataMind Intelligence Systems. All rights reserved.
+## License
+Proprietary

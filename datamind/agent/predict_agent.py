@@ -1,86 +1,110 @@
 """
-Prediction Agent for DataMind v4.0
-Delegates ML tasks to tools/ml_runner.py and forecasting to prophet/statsmodels.
+Prediction Agent for DataMind v4.0.
+Coordinates ML tasks with the UniversalMLRunner.
 """
 
 from __future__ import annotations
-
 import logging
-import time
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, List
 import pandas as pd
 import streamlit as st
-from plotly.graph_objects import Figure
 
-from datamind.tools.ml_runner import run_classification, run_regression
-from datamind.tools.chart_builder import build_prediction_results, build_time_series_chart
+from datamind.tools.ml_runner import UniversalMLRunner
+from datamind.tools.chart_builder import build_prediction_results, build_time_series_chart, build_distribution_chart
 from datamind.tools.stats import compute_fast_stats, DatasetStats
+from datamind.agent.diagnostic_agent import DiagnosticAgent
 
 logger = logging.getLogger(__name__)
 
 class PredictAgent:
-    """Agent for ML prediction and forecasting tasks."""
+    """Agent for ML prediction, clustering, and forecasting tasks."""
 
     def __init__(self, df: pd.DataFrame, stats: Optional[DatasetStats] = None):
         self.df = df
         self.stats = stats or compute_fast_stats(df)
+        self.runner = UniversalMLRunner()
 
-    def predict(self, target: str, mode: str = "auto") -> Dict[str, Any]:
-        """
-        Run prediction on the target column.
-        mode: 'classification', 'regression', or 'forecast'
-        """
-        if target not in self.df.columns:
-            return {"error": f"Target column '{target}' not found."}
+    def run_prediction_mission(self, target_col: Optional[str] = None, mode: str = "auto") -> Dict[str, Any]:
+        """Validates and executes a predictive/ML mission."""
+        
+        # 1. Validation via Diagnostic Agent
+        diagnostic = DiagnosticAgent(self.stats)
+        diag_res = diagnostic.validate_for_prediction(self.df, target_col)
+        
+        if not diag_res["can_proceed"]:
+            blocker_msg = "\n".join([f"- {b}" for b in diag_res["blockers"]])
+            return {"success": False, "error": f"Mission Aborted. Blockers detected:\n{blocker_msg}"}
 
-        # Auto-detect mode if not specified
+        # 2. Finalize target
+        final_target = target_col or diag_res.get("suggested_target")
+        
+        # 3. Task Selection
         if mode == "auto":
-            if target in self.stats.column_types["datetime"]:
-                mode = "forecast"
-            elif target in self.stats.column_types["boolean"] or self.df[target].nunique() < 20:
-                mode = "classification"
-            else:
-                mode = "regression"
+            task = self.runner.auto_select_task(self.df, final_target)
+        else:
+            task = mode
 
-        results = {}
         charts = []
-
         try:
-            with st.spinner(f"Running {mode} for {target}..."):
-                if mode == "classification":
-                    ml_res = run_classification(self.df, target)
-                    results = {
-                        "mode": "Classification",
-                        "best_model": ml_res["model_name"],
-                        "accuracy": ml_res["accuracy"],
-                        "f1_score": ml_res["f1"]
-                    }
-                    # charts.append(build_prediction_results(ml_res["y_test"], ml_res["y_pred"], "Classification Results"))
+            with st.spinner(f"Initiating {task.capitalize()} Mission..."):
+                # 4. Preprocessing
+                proc_data = self.runner.preprocess(self.df, final_target, task)
                 
-                elif mode == "regression":
-                    ml_res = run_regression(self.df, target)
-                    results = {
-                        "mode": "Regression",
-                        "best_model": ml_res["model_name"],
-                        "r2_score": ml_res["r2"],
-                        "mae": ml_res["mae"]
-                    }
-                    charts.append(build_prediction_results(ml_res["y_test"], ml_res["y_pred"], "Regression Baseline"))
+                # 5. Execution based on task
+                if task == "classification":
+                    res = self.runner.run_classification(
+                        proc_data["X_train"], proc_data["X_test"], 
+                        proc_data["y_train"], proc_data["y_test"], 
+                        proc_data["feature_names"]
+                    )
+                    # Add Strategic Implication
+                    accuracy_relativity = "high reliability" if res['test_accuracy'] > 0.8 else "moderate confidence" if res['test_accuracy'] > 0.6 else "exploratory utility"
+                    narrative = f"### ✅ Classification Mission Complete\n\n"
+                    narrative += f"- **Target Dimension**: `{final_target}`\n"
+                    narrative += f"- **Best Model**: {res['best_model_name']}\n"
+                    narrative += f"- **Test Accuracy**: {res['test_accuracy']:.1%}\n\n"
+                    narrative += f"#### 💡 Strategic Implication\n"
+                    narrative += f"The engine has detected discrete patterns in `{final_target}` with **{accuracy_relativity}**. "
+                    narrative += "This model can be used to categorize future observations based on the current feature set."
+                    # charts.append(build_prediction_results(res["y_test"], res["y_pred"], f"{final_target} Prediction"))
 
-                elif mode == "forecast":
-                    # For now, simple line chart as preview
+                elif task == "regression":
+                    res = self.runner.run_regression(
+                        proc_data["X_train"], proc_data["X_test"], 
+                        proc_data["y_train"], proc_data["y_test"], 
+                        proc_data["feature_names"]
+                    )
+                    # Add Strategic Implication
+                    quality = "strong correlation" if res['test_r2'] > 0.7 else "identifiable trend" if res['test_r2'] > 0.4 else "weak signal"
+                    narrative = f"### ✅ Regression Mission Complete\n\n"
+                    narrative += f"- **Predicting**: `{final_target}`\n"
+                    narrative += f"- **Best Model**: {res['best_model_name']}\n"
+                    narrative += f"- **R² Score**: {res['test_r2']:.3f}\n\n"
+                    narrative += f"#### 💡 Strategic Implication\n"
+                    narrative += f"The dataset exhibits a **{quality}** regarding `{final_target}`. "
+                    narrative += "While the model identifies the overall trajectory, local variance may still impact short-term accuracy."
+                    # charts.append(build_prediction_results(res["y_test"], res["y_pred"], f"{final_target} Trend"))
+
+                elif task == "clustering":
+                    res = self.runner.run_clustering(self.df, proc_data["feature_names"])
+                    narrative = f"### 🧩 Clustering Complete (k={res['optimal_k']})\n\n"
+                    for i, d in res["cluster_descriptions"].items():
+                        narrative += f"- **Cluster {i+1}**: {d['label']} (*{d['summary']}*)\n"
+
+                elif task == "timeseries":
+                    # Find date col
                     date_col = self.stats.column_types["datetime"][0]
-                    charts.append(build_time_series_chart(self.df, date_col, target))
-                    results = {"mode": "Forecasting", "message": "Forecasting model trained (Prophet/ARIMA)."}
+                    res = self.runner.run_timeseries(self.df, date_col, final_target)
+                    narrative = f"### 📈 Forecasting Complete\n\n- **Model**: {res['model_used']}\n- **Forecast Horizon**: 10 periods ahead.\n"
 
             return {
                 "success": True,
-                "results": results,
-                "charts": charts,
-                "response": f"Successfully completed **{mode}** for **{target}**. " + 
-                             f"Model: {results.get('best_model', 'N/A')}. Accuracy/R2: {results.get('accuracy', results.get('r2_score', 'N/A'))}"
+                "response": narrative,
+                "results": res,
+                "figures": charts,
+                "category": "simulation"
             }
 
         except Exception as e:
-            logger.error(f"Prediction failed: {e}")
-            return {"success": False, "error": str(e)}
+            logger.error(f"Prediction mission failed: {e}")
+            return {"success": False, "error": f"Mission error: {str(e)}"}

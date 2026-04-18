@@ -1,18 +1,10 @@
 {
-  "pythonVersion": "3.13",
-  "pythonPlatform": "Linux",
-  "include": [
-    "datamind",
-    "app.py"
-  ],
-  "extraPaths": [
-    "/home/shreyas/miniconda3/lib/python3.13/site-packages",
-    "datamind"
-  ],
-  "reportMissingImports": "warning",
-  "reportMissingModuleSource": "warning",
-  "typeCheckingMode": "basic",
-  "analysis": {
-    "useLibraryCodeForTypes": true
-  }
+    "pythonVersion": "3.10",
+    "pythonPlatform": "Linux",
+    "include": [".", "datamind"],
+    "exclude": ["__pycache__", ".venv", "scratch", "artifacts"],
+    "reportMissingImports": true,
+    "reportMissingModuleSource": false,
+    "venvPath": ".",
+    "venv": ".venv"
 }

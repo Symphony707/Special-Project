@@ -6,15 +6,14 @@ Provides premium styling and fixed-drawer components.
 
 from __future__ import annotations
 import streamlit as st
+import re
 import pandas as pd
 from typing import List, Dict, Any, Optional
 from plotly.graph_objects import Figure
 
 from datamind.memory.session import (
     get_dataframe,
-    get_schema_cache,
     get_summary_text,
-    get_pre_generated_chart
 )
 
 def create_split_layout():
@@ -77,16 +76,21 @@ def apply_custom_styles():
 
         /* Target the Right Column in a 2-column layout - Premium Style */
         /* Specific only to main workspace to avoid affecting sidebar utilities */
-        [data-testid="stMain"] [data-testid="stHorizontalBlock"] > div:last-child {
+        [data-testid="stMain"] [data-testid="stHorizontalBlock"] > div[data-testid="stColumn"]:last-child {
             background: var(--bg-card) !important;
             backdrop-filter: blur(15px) !important;
             -webkit-backdrop-filter: blur(15px) !important;
             border-left: 1px solid var(--border-glass) !important;
             border-radius: 24px !important;
-            padding: 1.5rem 1.5rem 1.5rem 1.5rem !important;
+            padding: 1.25rem 1.5rem !important;
             box-shadow: -15px 0 50px rgba(0,0,0,0.3) !important;
             transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1) !important;
             margin-top: 0 !important;
+            display: flex !important;
+            flex-direction: column !important;
+            justify-content: flex-start !important;
+            align-items: stretch !important;
+            align-self: flex-start !important;
         }
 
         /* Main Workspace Adjustment */
@@ -106,6 +110,15 @@ def apply_custom_styles():
             overflow-x: auto;
             background: linear-gradient(180deg, rgba(15,23,42,0) 0%, rgba(15,23,42,0.5) 100%);
             margin-top: 0 !important;
+        }
+
+        /* Top-Alignment Fix for Streamlit Columns */
+        [data-testid="stHorizontalBlock"] {
+            align-items: flex-start !important;
+        }
+        
+        div[data-testid="stVerticalBlock"] {
+            justify-content: flex-start !important;
         }
 
         /* Premium Button Styling */
@@ -438,42 +451,46 @@ def apply_custom_styles():
         </style>
     """, unsafe_allow_html=True)
 
-def render_left_panel_metrics(df: pd.DataFrame, file_size_kb: float):
-    """Render top metrics in a premium grid."""
+from datamind.tools.stats import DatasetStats
+
+def render_left_panel_metrics(stats: DatasetStats):
+    """Render top metrics in a premium grid using pre-computed statistics."""
     st.markdown("""
         <div style='margin-bottom: 1.5rem;'>
             <h3 style='margin: 0; font-family: "Outfit"; font-weight: 700; color: white; letter-spacing: -0.5px;'>Dataset Essentials</h3>
-            <p style='margin: 0.5rem 0 0 0; color: #94A3B8; font-size: 0.875rem;'>Quick overview of your dataset statistics</p>
+            <p style='margin: 0.5rem 0 0 0; color: #94A3B8; font-size: 0.875rem;'>High-fidelity dataset profiling (Universal Unsupervised Model)</p>
         </div>
     """, unsafe_allow_html=True)
     c1, c2, c3, c4 = st.columns(4)
     with c1:
         st.markdown(f"""
             <div style='background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.08); border-radius: 16px; padding: 1.25rem; text-align: center; transition: all 0.3s ease;'>
-                <div style='font-size: 2rem; font-weight: 700; color: white; font-family: "Outfit"; margin-bottom: 0.5rem;'>{len(df):,}</div>
+                <div style='font-size: 2rem; font-weight: 700; color: white; font-family: "Outfit"; margin-bottom: 0.5rem;'>{stats.row_count:,}</div>
                 <div style='color: #94A3B8; font-size: 0.875rem;'>Rows</div>
             </div>
         """, unsafe_allow_html=True)
     with c2:
         st.markdown(f"""
             <div style='background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.08); border-radius: 16px; padding: 1.25rem; text-align: center; transition: all 0.3s ease;'>
-                <div style='font-size: 2rem; font-weight: 700; color: white; font-family: "Outfit"; margin-bottom: 0.5rem;'>{len(df.columns):,}</div>
+                <div style='font-size: 2rem; font-weight: 700; color: white; font-family: "Outfit"; margin-bottom: 0.5rem;'>{stats.column_count:,}</div>
                 <div style='color: #94A3B8; font-size: 0.875rem;'>Columns</div>
             </div>
         """, unsafe_allow_html=True)
     with c3:
+        # Display memory usage from pre-computed stats
         st.markdown(f"""
             <div style='background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.08); border-radius: 16px; padding: 1.25rem; text-align: center; transition: all 0.3s ease;'>
-                <div style='font-size: 2rem; font-weight: 700; color: white; font-family: "Outfit"; margin-bottom: 0.5rem;'>{file_size_kb:.1f}</div>
-                <div style='color: #94A3B8; font-size: 0.875rem;'>KB</div>
+                <div style='font-size: 2rem; font-weight: 700; color: white; font-family: "Outfit"; margin-bottom: 0.5rem;'>{stats.memory_usage_mb:.1f}</div>
+                <div style='color: #94A3B8; font-size: 0.875rem;'>MB Usage</div>
             </div>
         """, unsafe_allow_html=True)
     with c4:
-        mem = df.memory_usage(deep=True).sum() / (1000 * 1000)
+        # Calculate overall clarity/quality score based on nulls and warnings
+        quality_score = max(0, 100 - (len(stats.data_quality_warnings) * 10) - (sum(stats.null_percent.values()) / (len(stats.null_percent or [1]) * 2)))
         st.markdown(f"""
             <div style='background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.08); border-radius: 16px; padding: 1.25rem; text-align: center; transition: all 0.3s ease;'>
-                <div style='font-size: 2rem; font-weight: 700; color: white; font-family: "Outfit"; margin-bottom: 0.5rem;'>{mem:.1f}</div>
-                <div style='color: #94A3B8; font-size: 0.875rem;'>MB</div>
+                <div style='font-size: 2rem; font-weight: 700; color: #10B981; font-family: "Outfit"; margin-bottom: 0.5rem;'>{quality_score:.0f}%</div>
+                <div style='color: #94A3B8; font-size: 0.875rem;'>Data Integrity</div>
             </div>
         """, unsafe_allow_html=True)
 
@@ -491,20 +508,26 @@ def render_summary_section(dossier: Any, predictions: dict = None, mode: str = "
         else:
             st.markdown("### 🔍 Automated Insight Briefing")
             with st.container(border=True):
-                text = dossier.get("text", "")
+                # Extract the narrative: Use lab_narrative (Theory) priority, fallback to response (Brief)
+                text = dossier.get("lab_narrative", dossier.get("response", ""))
+                
+                # Cleanup: Strip any inadvertently leaked tags
+                if isinstance(text, str):
+                    text = re.sub(r'<<<BRIEF>>>|<<<DETAILED>>>|\[GRAPH CAPTIONS\]', '', text).strip()
 
                 # Ensure proper structure: Introduction, Explanation, Visuals
-                # If the text doesn't have proper headers, add them
                 if text:
-                    if "## " not in text[:200]:
-                        # Check if it has Introduction section
-                        if not text.startswith("## Introduction") and not text.startswith("# Introduction"):
-                            # Add Introduction header and wrap text
+                    # Clean up the text to prevent header overlap
+                    if text.strip().startswith("#"):
+                        st.markdown(text)
+                    else:
+                        # Add a default header ONLY if no major headers appear in the first 100 chars
+                        if "## " not in text[:100] and "# " not in text[:100]:
                             st.markdown(f"## Introduction\n\n{text}")
                         else:
                             st.markdown(text)
-                    else:
-                        st.markdown(text)
+                else:
+                    st.warning("⚠️ Analytical narrative is being decoded. Refresh may be required.")
 
                 if dossier.get("figures"):
                     st.divider()
@@ -531,7 +554,14 @@ def render_summary_section(dossier: Any, predictions: dict = None, mode: str = "
             with st.container(border=True):
                 if predictions.get("fig"):
                     st.plotly_chart(predictions["fig"], width="stretch")
-                st.markdown(predictions.get("text", ""))
+                
+                # Extract and cleanup the narrative
+                pred_text = predictions.get("lab_narrative", predictions.get("response", ""))
+                if isinstance(pred_text, str):
+                    pred_text = re.sub(r'<<<BRIEF>>>|<<<DETAILED>>>', '', pred_text).strip()
+                
+                if pred_text:
+                    st.markdown(pred_text)
         elif mode == "prediction" or (mode == "all" and not predictions):
             st.markdown("---")
             st.markdown("#### 🔮 Strategic Forecasting Lab")
@@ -548,33 +578,48 @@ def render_summary_section(dossier: Any, predictions: dict = None, mode: str = "
                         st.rerun()
 
 def render_chat_interface(chat_history: List[Dict[str, Any]], filter_category: Optional[str] = None):
-    """Render text-only chat history in the right drawer with premium UI."""
+    """Render tiered chat history with metadata badges."""
     # Anchor for CSS to find this container
-    st.markdown('<div class="chat-drawer-anchor"></div>', unsafe_allow_html=True)
-
     # Premium Header
     st.markdown("""
-        <div style='margin-bottom: 1rem; margin-top: 0;'>
-            <h3 style='margin: 0; font-family: "Outfit"; font-weight: 700; color: white; letter-spacing: -0.5px; line-height: 1;'>Analyst Dialogue</h3>
-            <p style='margin: 0.25rem 0 0 0; color: #94A3B8; font-size: 0.875rem;'>Dialogue history and reasoning</p>
+        <div class="chat-drawer-anchor" style='margin-bottom: 0.75rem; margin-top: -0.25rem; padding: 0; display: block !important;'>
+            <h2 style='margin: 0; padding: 0; font-family: "Outfit", sans-serif; font-weight: 700; color: white; letter-spacing: -px; line-height: 1;'>Chatbot</h2>
+            <p style='margin: 0.3rem 0 0 0; padding: 0; color: #94A3B8; font-size: 0.85rem;'>Dialogue history and reasoning</p>
         </div>
     """, unsafe_allow_html=True)
 
     # Render messages
     for i, msg in enumerate(chat_history):
-        if filter_category and msg.get("category") != filter_category:
-            continue
-        with st.chat_message(msg["role"]):
-            st.markdown(msg["content"])
+        role = msg.get("role", "user")
+        content = msg.get("content", "")
+        tier = msg.get("tier", 1)
+        latency = msg.get("latency", 0)
+        
+        with st.chat_message(role):
+            # Assistant Metadata Badge
+            if role == "assistant" and not msg.get("is_status"):
+                badge_color = "#10B981" if tier == 1 else "#3B82F6" if tier == 2 else "#8B5CF6"
+                badge_text = "⚡ Instant" if tier == 1 else "💬 Quick" if tier == 2 else "🔬 Deep Analysis"
+                
+                st.markdown(f"""
+                    <div style='display: flex; align-items: center; gap: 8px; margin-bottom: 4px;'>
+                        <span style='background: {badge_color}22; color: {badge_color}; padding: 2px 8px; border-radius: 4px; font-size: 0.65rem; font-weight: 700; border: 1px solid {badge_color}44;'>{badge_text}</span>
+                        <span style='color: #64748B; font-size: 0.65rem;'>{latency}ms</span>
+                    </div>
+                """, unsafe_allow_html=True)
 
-            if "figures" in msg or "lab_narrative" in msg:
-                st.info("Detailed analysis and visualizations have been pushed to your Lab. Check the left sidebar to view the full report.")
+            st.markdown(content)
 
-    # Premium Chat Input
-    st.markdown('<div style="margin-top: auto;"></div>', unsafe_allow_html=True)
-    query = st.chat_input("Ask DataMind...", key="chat_input")
+            if "figures" in msg and msg["figures"]:
+                target = msg.get("category", "analysis")
+                if target == "simulation":
+                    st.info("✅ Rendered to Simulation Lab ↑")
+                else:
+                    st.info("✅ Rendered to Analysis Lab ↑")
 
-    return query
+    # Space before input
+    st.markdown('<div style="margin-top: 1rem;"></div>', unsafe_allow_html=True)
+    return None
 
 def render_main_stage_artifacts(chat_history: List[Dict[str, Any]], filter_category: Optional[str] = None):
     """Render large artifacts filtered by their scientific context (forensics vs simulation)."""
@@ -584,26 +629,41 @@ def render_main_stage_artifacts(chat_history: List[Dict[str, Any]], filter_categ
     if not chat_history:
         return
 
-    st.markdown("---")
-    header_text = "🧪 Analysis Laboratory" if filter_category != "simulation" else "🔬 Simulation Laboratory"
-    st.markdown(f"### {header_text}")
+    # Pre-check for any visible artifacts to show global header
+    # Ensure we only count messages with actual content (not empty Mission 0 messages)
+    has_visible_artifacts = any(
+        (m.get("figures") and len(m.get("figures")) > 0) or m.get("lab_narrative") 
+        for m in chat_history 
+        if not filter_category or m.get("category") == filter_category
+    )
     
+    if has_visible_artifacts:
+        st.markdown("---")
+        if not filter_category:
+            st.markdown("### 🧪 Consolidated Laboratory Results")
+        else:
+            header_text = "🧪 Analysis Laboratory Results" if filter_category == "analysis" else "🔬 Prediction Laboratory Results"
+            st.markdown(f"### {header_text}")
+
     for i, msg in enumerate(chat_history):
         # Apply filtering logic
         if filter_category and msg.get("category") != filter_category:
             continue
-        if "figures" in msg or "lab_narrative" in msg:
+        
+        # Only render if there's actual visual or narrative content
+        if msg.get("figures") or msg.get("lab_narrative"):
             artifacts_found = True
             with st.container():
-                session_type = "Forensic" if msg.get("category") == "analysis" else "Simulation"
-                st.markdown(f"**{session_type} Session {i+1}**")
+                session_type = "Analysis Laboratory" if msg.get("category") == "analysis" else "Prediction Laboratory"
+                st.markdown(f"### {session_type} Results (Mission {i+1})")
+                
                 charts = msg.get("figures", [])
                 captions = msg.get("captions", [])
                 
                 # 1. Render Visual Artifacts (Charts/Tables)
                 for j, chart in enumerate(charts):
                     if isinstance(chart, Figure):
-                        st.plotly_chart(chart, width="stretch", key=f"lab_artifact_fig_{i}_{j}_{id(chart)}")
+                        st.plotly_chart(chart, use_container_width=True, key=f"lab_artifact_fig_{i}_{j}_{id(chart)}")
                         if j < len(captions):
                             st.info(f"💡 {captions[j]}")
                 
@@ -613,7 +673,6 @@ def render_main_stage_artifacts(chat_history: List[Dict[str, Any]], filter_categ
                         narrative = msg["lab_narrative"]
                         # Ensure proper header format
                         if narrative and "## " not in narrative[:200]:
-                            # If no headers, wrap in Introduction header
                             st.markdown(f"## Introduction\n\n{narrative}")
                         else:
                             st.markdown(narrative)
@@ -622,3 +681,57 @@ def render_main_stage_artifacts(chat_history: List[Dict[str, Any]], filter_categ
     
     if not artifacts_found:
         st.caption("Request a chart or table in chat to see it rendered here in high resolution.")
+
+def render_file_uploader():
+    """Unified file ingestion component for all analytical labs."""
+    from datamind.memory.session import (
+        get_dataframe, set_summary_text, handle_file_upload
+    )
+    from datamind.agent.summary_agent import SummaryAgent
+    from datamind.agent.viz_agent import VizAgent
+    from config import OLLAMA_MODEL
+
+    user = st.session_state.get("current_user")
+    if not user: return
+
+    # Ingest New Analytical Asset
+    with st.expander("📥 Ingest New Analytical Asset", expanded=(get_dataframe() is None)):
+        uploaded_file = st.file_uploader(
+            "Upload Asset (MAX 50MB per file • CSV, XLSX, XLS, JSON, PARQUET)", 
+            type=["csv", "xlsx", "xls", "json", "parquet"], 
+            label_visibility="visible",
+            key=f"unified_uploader_{st.session_state.get('main_nav', 'dash')}"
+        )
+        
+        if uploaded_file:
+            # Check if processing is needed
+            needs_processing = (
+                st.session_state.get("current_file_name") != uploaded_file.name or 
+                get_dataframe() is None
+            )
+
+            if needs_processing:
+                with st.spinner("Decoding DNA of Asset..."):
+                    df = handle_file_upload(uploaded_file, user['id'])
+                    
+                    if df is not None:
+                        # Clear old state and trigger analysis
+                        set_summary_text(None)
+                        agent = SummaryAgent(model=st.session_state.get("selected_model", OLLAMA_MODEL))
+                        dossier = agent.summarize_dossier(df)
+                        set_summary_text(dossier)
+                        
+                        viz = VizAgent(df)
+                        viz.generate_and_cache_top_charts()
+                        
+                        # Cache the results for instant recall later
+                        from database import upsert_analytical_cache
+                        import json
+                        
+                        # Remove non-serializable figures before caching
+                        cache_payload = dossier.copy() if isinstance(dossier, dict) else {"text": dossier}
+                        if "figures" in cache_payload: del cache_payload["figures"]
+                        
+                        upsert_analytical_cache(st.session_state["current_file_id"], json.dumps(cache_payload), "") 
+                        
+                        st.rerun()

@@ -1,81 +1,63 @@
 """
-Left Panel for DataMind SaaS
-Handles Uploads and Dataset Profiling with Premium UI.
+Left Panel for DataMind SaaS - Analysis Laboratory View.
+Handles forensic data ingestion and automated breakdown generation.
 """
 
 from __future__ import annotations
 import streamlit as st
-import pandas as pd
 from datamind.memory.session import (
-    set_dataframe, set_summary_text, get_dataframe, get_summary_text, get_chat_history,
-    get_predictions, clear_predictions, add_to_dataset_history
+    get_dataframe, get_summary_text, set_summary_text, get_chat_history,
+    get_predictions, handle_file_upload
 )
-from datamind.tools.stats import compute_fast_stats
 from datamind.agent.summary_agent import SummaryAgent
 from datamind.agent.viz_agent import VizAgent
 from datamind.ui.layout import render_left_panel_metrics, render_summary_section, render_main_stage_artifacts
-from datamind.config import OLLAMA_MODEL
+from config import OLLAMA_MODEL
 
 def render_left_panel():
-    """Main rendering loop for left panel with premium UI."""
-    # Premium Header Section - Remove top margin to fix alignment
+    """Main rendering loop for Analysis Laboratory."""
+    user = st.session_state.get("current_user")
+    
+    # Lab Header
     st.markdown("""
-        <div style='display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem; margin-top: 0;'>
-            <div style='margin-top: 0;'>
-                <h3 style='margin: 0; font-family: "Outfit"; font-weight: 700; color: white; line-height: 1;'>Source Data</h3>
-                <p style='margin: 0.25rem 0 0 0; color: #94A3B8; font-size: 0.875rem;'>Upload your CSV dataset to begin analysis</p>
-            </div>
+        <div style='margin-bottom: 2rem;'>
+            <h2 style='margin: 0; font-family: "Outfit"; font-weight: 700; color: white;'>🧪 Analysis Laboratory</h2>
+            <p style='margin: 0.25rem 0 0 0; color: #94A3B8; font-size: 0.875rem;'>Deep forensic breakdown and autonomous dataset profiling.</p>
         </div>
     """, unsafe_allow_html=True)
 
-    uploaded_file = st.file_uploader("Upload CSV", type=["csv"], label_visibility="collapsed")
-    
-    if uploaded_file:
-        df = pd.read_csv(uploaded_file)
-        
-        # Check if new file
-        if st.session_state.get("current_file") != uploaded_file.name:
-            st.session_state["current_file"] = uploaded_file.name
-            st.session_state["current_file_size"] = uploaded_file.size # Fix: Capture actual file size
-            set_dataframe(df)
-            add_to_dataset_history(uploaded_file.name, len(df), len(df.columns), pd.Timestamp.now().strftime("%Y-%m-%d %H:%M"))
-            
-            # 1. Trigger Summary Agent (Fast) - Returns Dossier Dict
-            with st.spinner("Analyzing dataset..."):
-                agent = SummaryAgent(model=st.session_state.get("selected_model", OLLAMA_MODEL))
-                dossier = agent.summarize_dossier(df)
-                set_summary_text(dossier) 
-                clear_predictions() # Reset for new file
-            
-            # 2. Trigger Viz Cache (Fast)
-            viz = VizAgent(df)
-            viz.generate_and_cache_top_charts()
-            
-            st.rerun()
+    # 1. Forensic Asset Ingestion (Uploader)
+    from datamind.ui.layout import render_file_uploader
+    render_file_uploader()
 
-    # Render Stats if data exists
+    # 2. Main Laboratory Stage
     df = get_dataframe()
     if df is not None:
-        file_size_kb = st.session_state.get("current_file_size", 0) / 1000 # Fix: Use decimal KB to match system reporting
-        render_left_panel_metrics(df, file_size_kb)
+        # Optimization: Pre-compute stats once for the entire view
+        from datamind.tools.stats import compute_fast_stats
+        stats = compute_fast_stats(df)
         
-        # Manual Trigger for Deep Analysis
-        if not get_summary_text():
-            if st.button("🚀 Generate Core Analysis Report", width="stretch"):
-                with st.spinner("Executing Core Data Analysis Process..."):
-                    agent = SummaryAgent(model=st.session_state.get("selected_model", OLLAMA_MODEL))
-                    dossier = agent.summarize_dossier(df)
-                    set_summary_text(dossier)
-                    clear_predictions()
-                st.rerun()
+        # Metrics are now tucked away in an "Essentials" expander to avoid "Dashboard Behavior"
+        with st.expander("📊 Dataset Essentials & Statistics", expanded=False):
+            render_left_panel_metrics(stats)
+            st.divider()
+            st.markdown("#### Column Profiling")
+            st.dataframe(df.dtypes.to_frame("Type").T, use_container_width=True)
 
-        # Dashboard Core Execution: Interleaved Scientific Routing
-        # 1. Forensic Forensic Layer (Generated Analysis + Forensic Chat Q&A)
-        render_summary_section(get_summary_text(), predictions=None, mode="analysis")
+        # Forensic Results Area
+        st.markdown("### 🔍 Forensic Breakdown")
+        
+        # This renders the detailed AI narrative (Introduction, Explained, Visuals)
+        render_summary_section(get_summary_text(), mode="analysis")
+        
+        # This renders any deeper analysis artifacts generated via chat
         render_main_stage_artifacts(get_chat_history(), filter_category="analysis")
         
-        # 2. Strategic Prediction Layer (Generated Forecast + Predictive Chat Q&A)
-        render_summary_section(None, get_predictions(), mode="prediction")
-        render_main_stage_artifacts(get_chat_history(), filter_category="simulation")
     else:
-        st.info("Upload a dataset to see metrics.")
+        st.markdown("""
+            <div style='padding: 3rem; text-align: center; background: rgba(255,255,255,0.03); border: 1px dashed rgba(255,255,255,0.1); border-radius: 20px;'>
+                <div style='font-size: 3rem; margin-bottom: 1rem;'>👋</div>
+                <h4 style='color: white;'>Laboratory Idle</h4>
+                <p style='color: #94A3B8;'>Inject a dataset above or activate an existing lab from the <b>Executive Dashboard</b> to begin analysis.</p>
+            </div>
+        """, unsafe_allow_html=True)

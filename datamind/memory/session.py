@@ -12,6 +12,15 @@ import streamlit as st
 import pandas as pd
 from plotly.graph_objects import Figure
 
+
+def _clean_md_block(t: str) -> str:
+    if not isinstance(t, str): return ""
+    t = re.sub(r'<<<BRIEF>>>|<<<DETAILED>>>|\[GRAPH CAPTIONS\]', '', t).strip()
+    if t.startswith('```'):
+        t = re.sub(r'^```[a-zA-Z]*\n?', '', t)
+        t = re.sub(r'\n?```$', '', t)
+    return t.strip()
+
 import database as db
 from datamind.tools.file_loader import UniversalFileLoader
 from config import UPLOADS_DIR, OLLAMA_MODEL
@@ -181,11 +190,11 @@ def add_chat_message(
     history = get_chat_history()
     message = {
         "role": role,
-        "content": content,
+        "content": _clean_md_block(content) if role == "assistant" else content,
         "category": category,
         "figures": figures or [],
         "captions": captions or [],
-        "lab_narrative": lab_narrative,
+        "lab_narrative": _clean_md_block(lab_narrative) if lab_narrative else None,
         "tier": tier,
         "latency": latency,
         "intent": intent,

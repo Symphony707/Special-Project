@@ -494,6 +494,15 @@ def render_left_panel_metrics(stats: DatasetStats):
             </div>
         """, unsafe_allow_html=True)
 
+
+def _clean_md_block(t: str) -> str:
+    if not isinstance(t, str): return ""
+    t = re.sub(r'<<<BRIEF>>>|<<<DETAILED>>>|\[GRAPH CAPTIONS\]', '', t).strip()
+    if t.startswith('```'):
+        t = re.sub(r'^```[a-zA-Z]*\n?', '', t)
+        t = re.sub(r'\n?```$', '', t)
+    return t.strip()
+
 def render_summary_section(dossier: Any, predictions: dict = None, mode: str = "all"):
     """Render the dossier and/or predictions based on the current Lab mode."""
     # Guard: Only exit early if everything is missing AND we aren't specifically initializing projections
@@ -513,7 +522,7 @@ def render_summary_section(dossier: Any, predictions: dict = None, mode: str = "
                 
                 # Cleanup: Strip any inadvertently leaked tags
                 if isinstance(text, str):
-                    text = re.sub(r'<<<BRIEF>>>|<<<DETAILED>>>|\[GRAPH CAPTIONS\]', '', text).strip()
+                    text = _clean_md_block(text)
 
                 # Ensure proper structure: Introduction, Explanation, Visuals
                 if text:
@@ -558,7 +567,7 @@ def render_summary_section(dossier: Any, predictions: dict = None, mode: str = "
                 # Extract and cleanup the narrative
                 pred_text = predictions.get("lab_narrative", predictions.get("response", ""))
                 if isinstance(pred_text, str):
-                    pred_text = re.sub(r'<<<BRIEF>>>|<<<DETAILED>>>', '', pred_text).strip()
+                    pred_text = _clean_md_block(pred_text)
                 
                 if pred_text:
                     st.markdown(pred_text)
@@ -672,6 +681,7 @@ def render_main_stage_artifacts(chat_history: List[Dict[str, Any]], filter_categ
                     with st.expander("📖 View Strategic Deep-Dive Narrative", expanded=True):
                         narrative = msg["lab_narrative"]
                         # Ensure proper header format
+                        narrative = _clean_md_block(narrative)
                         if narrative and "## " not in narrative[:200]:
                             st.markdown(f"## Introduction\n\n{narrative}")
                         else:

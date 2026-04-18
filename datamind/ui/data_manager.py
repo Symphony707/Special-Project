@@ -79,9 +79,9 @@ def render_data_manager():
             
             with c6:
                 if is_active:
-                    st.button("Active", key=f"active_{file_id}", disabled=True, use_container_width=True)
+                    st.button("Active", key=f"active_{file_id}", disabled=True, width="stretch")
                 else:
-                    if st.button("Activate", key=f"activate_{file_id}", type="primary", use_container_width=True):
+                    if st.button("Activate", key=f"activate_{file_id}", type="primary", width="stretch"):
                         # Trigger Activation and Redirection
                         success = activate_data_asset(file_id, user['id'])
                         if success:

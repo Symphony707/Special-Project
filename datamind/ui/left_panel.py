@@ -42,7 +42,7 @@ def render_left_panel():
             render_left_panel_metrics(stats)
             st.divider()
             st.markdown("#### Column Profiling")
-            st.dataframe(df.dtypes.to_frame("Type").T, use_container_width=True)
+            st.dataframe(df.dtypes.astype(str).to_frame("Type").T, width="stretch")
 
         # Forensic Results Area
         st.markdown("### 🔍 Forensic Breakdown")

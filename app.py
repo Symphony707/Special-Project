@@ -111,7 +111,7 @@ def render_main_app(user):
         
         st.markdown("<div style='margin-top: auto; height: 10vh;'></div>", unsafe_allow_html=True)
         
-        if st.button("🚪 Sign Out", use_container_width=True, type="secondary"):
+        if st.button("🚪 Sign Out", width="stretch", type="secondary"):
             handle_logout()
 
     # Header Section

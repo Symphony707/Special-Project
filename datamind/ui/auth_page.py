@@ -68,13 +68,13 @@ def show_auth_page():
 
         # Tab selector (3 styled buttons)
         c1, c2, c3 = st.columns(3)
-        if c1.button("Sign In", type="primary" if st.session_state["auth_tab"]=="signin" else "secondary", use_container_width=True):
+        if c1.button("Sign In", type="primary" if st.session_state["auth_tab"]=="signin" else "secondary", width="stretch"):
             st.session_state["auth_tab"] = "signin"
             st.rerun()
-        if c2.button("Register", type="primary" if st.session_state["auth_tab"]=="register" else "secondary", use_container_width=True):
+        if c2.button("Register", type="primary" if st.session_state["auth_tab"]=="register" else "secondary", width="stretch"):
             st.session_state["auth_tab"] = "register"
             st.rerun()
-        if c3.button("Guest", type="primary" if st.session_state["auth_tab"]=="guest" else "secondary", use_container_width=True):
+        if c3.button("Guest", type="primary" if st.session_state["auth_tab"]=="guest" else "secondary", width="stretch"):
             st.session_state["auth_tab"] = "guest"
             st.rerun()
 
@@ -120,7 +120,7 @@ def _render_signin_tab():
 
     # Disable button while in-flight
     btn_disabled = st.session_state.get("auth_in_flight", False)
-    if st.button("Sign In", disabled=btn_disabled, use_container_width=True):
+    if st.button("Sign In", disabled=btn_disabled, width="stretch"):
         if not email or not password:
             st.session_state["auth_error_signin"] = "Please enter both email and password"
             st.rerun()
@@ -171,7 +171,7 @@ def _render_register_tab():
             st.error(err)
 
     btn_disabled = st.session_state.get("auth_in_flight", False)
-    if st.button("Create Account", disabled=btn_disabled, use_container_width=True):
+    if st.button("Create Account", disabled=btn_disabled, width="stretch"):
         # Clear previous errors
         for key in list(st.session_state.keys()):
             if key.startswith("auth_error_"):
@@ -192,7 +192,7 @@ def _render_register_tab():
 def _render_guest_tab():
     st.warning("⚠️ Guest sessions are temporary. Files and analyses won't be saved.")
     st.caption("Sign up for free to save your work permanently.")
-    if st.button("Continue as Guest", use_container_width=True):
+    if st.button("Continue as Guest", width="stretch"):
         st.session_state["current_user"] = {
             "id": None,
             "username": "Guest",

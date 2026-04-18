@@ -112,7 +112,8 @@ def handle_file_upload(uploaded_file, user_id: int):
     )
 
     # 5. Map User to File
-    db.create_user_file_ref(user_id, file_id, uploaded_file.name)
+    if user_id is not None:
+        db.create_user_file_ref(user_id, file_id, uploaded_file.name)
     
     # 5b. Persist to Disk if not present
     file_path = os.path.join(UPLOADS_DIR, file_hash)
@@ -132,8 +133,9 @@ def handle_file_upload(uploaded_file, user_id: int):
     # Trigger Learning Loop (Statistical)
     try:
         from datamind.memory.learner import PatternLearner
-        learner = PatternLearner()
-        learner.extract_statistical_patterns(df, file_id, user_id)
+        if user_id is not None:
+            learner = PatternLearner()
+            learner.extract_statistical_patterns(df, file_id, user_id)
     except Exception as e:
         logging.warning(f"Pattern learning failed: {e}")
 

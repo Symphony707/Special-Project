@@ -59,7 +59,7 @@ def render_dashboard():
             # Offer Refinement
             c1, c2 = st.columns([1, 4])
             with c1:
-                if st.button("✨ Refine Analysis", use_container_width=True, help="Building a deeper version of this analysis based on previous findings."):
+                if st.button("✨ Refine Analysis", width="stretch", help="Building a deeper version of this analysis based on previous findings."):
                     with st.spinner("Deepening Analytical Context..."):
                          from datamind.agent.summary_agent import SummaryAgent
                          from database import upsert_analytical_cache

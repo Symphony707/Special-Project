@@ -537,7 +537,7 @@ def render_summary_section(dossier: Any, predictions: dict = None, mode: str = "
 
                     # SINGLE COLUMN FEED for better vertical storytelling
                     for idx, fig in enumerate(figs):
-                        st.plotly_chart(fig, use_container_width=True, key=f"summary_dossier_fig_{idx}_{id(fig)}")
+                        st.plotly_chart(fig, width="stretch", key=f"summary_dossier_fig_{idx}_{id(fig)}")
                         if idx < len(captions):
                             # Premium Caption Styling
                             st.markdown(f"""
@@ -663,7 +663,7 @@ def render_main_stage_artifacts(chat_history: List[Dict[str, Any]], filter_categ
                 # 1. Render Visual Artifacts (Charts/Tables)
                 for j, chart in enumerate(charts):
                     if isinstance(chart, Figure):
-                        st.plotly_chart(chart, use_container_width=True, key=f"lab_artifact_fig_{i}_{j}_{id(chart)}")
+                        st.plotly_chart(chart, width="stretch", key=f"lab_artifact_fig_{i}_{j}_{id(chart)}")
                         if j < len(captions):
                             st.info(f"💡 {captions[j]}")
                 

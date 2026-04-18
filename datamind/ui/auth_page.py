@@ -8,6 +8,15 @@ import uuid
 import logging
 from datamind.auth import auth
 
+import base64
+
+def get_logo_base64():
+    try:
+        with open("assets/logo.jpg", "rb") as f:
+            return base64.b64encode(f.read()).decode()
+    except Exception:
+        return ""
+
 def show_auth_page():
     """Centered auth portal with tabbed navigation."""
     
@@ -55,9 +64,12 @@ def show_auth_page():
     col1, col2, col3 = st.columns([1, 2, 1])
     
     with col2:
-        st.markdown("""
+        img_b64 = get_logo_base64()
+        logo_img = f'<img src="data:image/jpeg;base64,{img_b64}" style="width: 50px; height: 50px; border-radius: 12px; vertical-align: middle; margin-right: 12px; margin-bottom: 8px;" />' if img_b64 else ''
+        
+        st.markdown(f"""
             <div class="auth-header">
-                <div class="auth-logo">DataMind SaaS</div>
+                <div class="auth-logo">{logo_img}DataMind SaaS</div>
                 <div class="auth-subtitle">Autonomous Intelligence for Modern Enterprises</div>
             </div>
         """, unsafe_allow_html=True)

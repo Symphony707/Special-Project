@@ -19,6 +19,14 @@ import datamind.ui.account_page as d_ui_account
 from datamind.ui.left_panel import render_left_panel
 from datamind.ui.right_panel import render_right_panel
 from datamind.memory import session
+import base64
+
+def get_logo_base64():
+    try:
+        with open("assets/logo.jpg", "rb") as f:
+            return base64.b64encode(f.read()).decode()
+    except Exception:
+        return ""
 
 # Page Config (Must be first)
 st.set_page_config(
@@ -115,9 +123,13 @@ def render_main_app(user):
             handle_logout()
 
     # Header Section
-    st.markdown("""
+    img_b64 = get_logo_base64()
+    logo_img = f'<img src="data:image/jpeg;base64,{img_b64}" style="width: 45px; height: 45px; border-radius: 12px; margin-right: 4px;" />' if img_b64 else ''
+    
+    st.markdown(f"""
     <div style='padding: 0.75rem 0 1.5rem 0; border-bottom: 1px solid rgba(255,255,255,0.08); margin-bottom: 2rem;'>
         <div style='display: flex; align-items: center; gap: 1rem;'>
+            {logo_img}
             <h1 style='font-family: "Outfit"; font-weight: 800; color: white; margin: 0; font-size: 2.2rem; letter-spacing: -1px;'>
                 DataMind <span style='color: #6366F1; font-size: 1.8rem;'>SaaS</span>
             </h1>

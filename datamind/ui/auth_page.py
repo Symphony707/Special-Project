@@ -123,16 +123,19 @@ def _apply_auth_result(result, identifier):
     st.rerun()
 
 def _render_signin_tab():
-    email = st.text_input("Email", key="signin_email", placeholder="you@example.com")
-    password = st.text_input("Password", type="password", key="signin_password", placeholder="Your password")
+    with st.form("signin_form", border=False):
+        email = st.text_input("Email", key="signin_email", placeholder="you@example.com")
+        password = st.text_input("Password", type="password", key="signin_password", placeholder="Your password")
 
-    # Show stored error if any
-    if st.session_state.get("auth_error_signin"):
-        st.error(st.session_state["auth_error_signin"])
+        # Show stored error if any
+        if st.session_state.get("auth_error_signin"):
+            st.error(st.session_state["auth_error_signin"])
 
-    # Disable button while in-flight
-    btn_disabled = st.session_state.get("auth_in_flight", False)
-    if st.button("Sign In", disabled=btn_disabled, width="stretch"):
+        # Disable button while in-flight
+        btn_disabled = st.session_state.get("auth_in_flight", False)
+        submitted = st.form_submit_button("Sign In", disabled=btn_disabled, use_container_width=True)
+
+    if submitted:
         if not email or not password:
             st.session_state["auth_error_signin"] = "Please enter both email and password"
             st.rerun()
@@ -179,19 +182,22 @@ def _render_signin_tab():
                     st.error(res["error"])
 
 def _render_register_tab():
-    username = st.text_input("Username", key="reg_username", placeholder="3-20 chars, letters/numbers/_")
-    email = st.text_input("Email", key="reg_email")
-    password = st.text_input("Password", type="password", key="reg_pass", placeholder="Min 8 chars, 1 letter + 1 number")
-    confirm = st.text_input("Confirm Password", type="password", key="reg_confirm")
+    with st.form("register_form", border=False):
+        username = st.text_input("Username", key="reg_username", placeholder="3-20 chars, letters/numbers/_")
+        email = st.text_input("Email", key="reg_email")
+        password = st.text_input("Password", type="password", key="reg_pass", placeholder="Min 8 chars, 1 letter + 1 number")
+        confirm = st.text_input("Confirm Password", type="password", key="reg_confirm")
 
-    # Inline field errors
-    for field in ["username", "email", "password", "confirm_password", "general"]:
-        err = st.session_state.get(f"auth_error_{field}")
-        if err:
-            st.error(err)
+        # Inline field errors
+        for field in ["username", "email", "password", "confirm_password", "general"]:
+            err = st.session_state.get(f"auth_error_{field}")
+            if err:
+                st.error(err)
 
-    btn_disabled = st.session_state.get("auth_in_flight", False)
-    if st.button("Create Account", disabled=btn_disabled, width="stretch"):
+        btn_disabled = st.session_state.get("auth_in_flight", False)
+        submitted = st.form_submit_button("Create Account", disabled=btn_disabled, use_container_width=True)
+
+    if submitted:
         # Clear previous errors
         for key in list(st.session_state.keys()):
             if key.startswith("auth_error_"):

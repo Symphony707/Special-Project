@@ -1,4 +1,4 @@
-# DataMind SaaS
+# DataMind
 
 <div align="center">
 

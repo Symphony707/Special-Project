@@ -165,8 +165,8 @@ DataMind/
 ### 1. Clone the Repository
 
 ```bash
-git clone https://github.com/Shreyas-Reddy707/Datamind_Saas.git
-cd Datamind_Saas
+git clone https://github.com/Shreyas-Reddy707/Datamind.git
+cd Datamind
 ```
 
 ### 2. Install Dependencies

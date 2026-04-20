@@ -125,12 +125,18 @@ def render_right_panel():
         _process_tier3_agent(agent_data)
         st.rerun()
 
-def handle_chat_query(query: str, user_id: int, file_id: int, df: Any, fingerprint: Dict):
+def handle_chat_query(query: str, user_id: Any, file_id: int, df: Any, fingerprint: Dict):
     """Tiered Response Pipeline."""
     from datamind.security.rate_limiter import RateLimiter
     from datamind.security.authorizer import Authorizer
 
-    Authorizer.assert_file_access(user_id, file_id)
+    user = st.session_state.get("current_user")
+    is_guest = user and user.get("is_guest")
+
+    if is_guest:
+        user_id = user.get("guest_key", "guest")
+    else:
+        Authorizer.assert_file_access(user_id, file_id)
     
     rate_result = RateLimiter.check_chat(user_id)
     if not rate_result["allowed"]:
@@ -250,7 +256,9 @@ def _process_tier3_agent(agent_data: Dict):
 
     with st.spinner("Executing Deep Analysis..."):
         try:
-            Authorizer.assert_file_access(user_id, file_id)
+            user = st.session_state.get("current_user")
+            if not (user and user.get("is_guest")):
+                Authorizer.assert_file_access(user_id, file_id)
             orch = Orchestrator()
             res = orch.route_query(
                 query=query,

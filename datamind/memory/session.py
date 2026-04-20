@@ -20,7 +20,18 @@ def _clean_md_block(t: str) -> str:
     if t.startswith('```'):
         t = re.sub(r'^```[a-zA-Z]*\n?', '', t)
         t = re.sub(r'\n?```$', '', t)
-    return t.strip()
+        
+    # Prevent multi-space indenting from triggering markdown code blocks
+    lines = t.split('\n')
+    cleaned_lines = []
+    for line in lines:
+        stripped = line.lstrip()
+        if (line.startswith('    ') or line.startswith('\t')) and not (stripped.startswith('-') or stripped.startswith('*')):
+            cleaned_lines.append(stripped)
+        else:
+            cleaned_lines.append(line)
+            
+    return '\n'.join(cleaned_lines).strip()
 
 import database as db
 from datamind.tools.file_loader import UniversalFileLoader

@@ -1,0 +1,114 @@
+.lab-container, .data-manager-container {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.lab-controls {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.control-group {
+    display: flex;
+    gap: 12px;
+}
+
+.target-select {
+    flex: 1;
+    background: var(--bg-base);
+    border: 1px solid var(--border-default);
+    padding: 12px;
+    border-radius: var(--radius-sm);
+    color: var(--text-primary);
+    font-size: 14px;
+}
+
+.train-btn {
+    background: var(--accent-cyan);
+    color: var(--bg-base);
+    padding: 0 24px;
+    border-radius: var(--radius-sm);
+    font-weight: 700;
+}
+
+.lab-results {
+    display: grid;
+    grid-template-columns: 1fr 2fr;
+    gap: 20px;
+}
+
+.metrics-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-top: 16px;
+}
+
+.metric {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.metric label {
+    font-size: 11px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+}
+
+.metric span {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--accent-cyan);
+}
+
+.analysis-text {
+    margin-top: 16px;
+    line-height: 1.6;
+    color: var(--text-secondary);
+}
+
+/* Data Manager Scales */
+.schema-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 16px;
+    margin-top: 16px;
+}
+
+.schema-item {
+    background: var(--bg-base);
+    padding: 16px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border-subtle);
+}
+
+.col-name {
+    font-weight: 700;
+    margin-bottom: 4px;
+}
+
+.col-type {
+    font-size: 11px;
+    color: var(--accent-purple);
+    text-transform: uppercase;
+    margin-bottom: 8px;
+}
+
+.col-stats {
+    font-size: 12px;
+    color: var(--text-muted);
+}
+
+.pii-alert {
+    margin-top: 12px;
+    padding: 12px;
+    background: rgba(244,63,94,0.05);
+    border: 1px solid var(--accent-red);
+    border-radius: var(--radius-sm);
+    color: var(--accent-red);
+    font-size: 13px;
+    font-weight: 600;
+}

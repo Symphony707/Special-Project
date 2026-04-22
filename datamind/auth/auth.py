@@ -97,6 +97,42 @@ def register_user(username, email, password, confirm_password) -> dict:
         logging.error(f"Register error: {e}")
         return {"success": False, "field": "general", "error": "Registration failed. Please try again."}
 
+# Guest Session Creation
+def register_guest() -> dict:
+    import uuid
+    # Create a unique but recognizable guest identity
+    guest_id = str(uuid.uuid4())[:8]
+    username = f"guest_{guest_id}"
+    email = f"{username}@guest.datamind.ai"
+    # Guests have no password, but we store a hash to keep DB happy
+    password_hash = "GUEST_ACCOUNT_NO_PASSWORD" 
+
+    try:
+        with db.get_db_connection() as conn:
+            cursor = conn.execute(
+                "INSERT INTO users (username, email, password_hash, is_guest) VALUES (?, ?, ?, 1)",
+                (username, email, password_hash)
+            )
+            user_id = cursor.lastrowid
+            
+        db.log_event(user_id, 'guest_access')
+        session_result = create_session_for_user(user_id)
+        
+        return {
+            "success": True, 
+            "user": {
+                "id": user_id, 
+                "username": "Guest", 
+                "email": email, 
+                "is_guest": True,
+                "is_admin": False
+            },
+            "session_token": session_result["token"]
+        }
+    except Exception as e:
+        logging.error(f"Guest register error: {e}")
+        return {"success": False, "error": "Failed to initialize guest session."}
+
 # Login
 def login_user(email, password) -> dict:
     from datamind.security.sanitizer import InputSanitizer
@@ -174,6 +210,7 @@ def validate_session(session_token) -> Optional[Dict[str, Any]]:
         "username": user["username"],
         "email": user["email"],
         "is_admin": bool(user.get("is_admin", 0)),
+        "is_guest": bool(user.get("is_guest", 0)),
         "session_token": session_token
     }
 

@@ -9,7 +9,6 @@ import logging
 from typing import Any, Dict, List, Optional
 import pandas as pd
 
-from datamind.llm.ollama_client import OllamaClient
 from datamind.tools.stats import DatasetStats, compute_fast_stats
 
 logger = logging.getLogger(__name__)
@@ -17,9 +16,8 @@ logger = logging.getLogger(__name__)
 class CleaningAgent:
     """Agent that performs autonomous data cleaning operations."""
 
-    def __init__(self, df: pd.DataFrame, client: Optional[OllamaClient] = None):
+    def __init__(self, df: pd.DataFrame):
         self.df = df
-        self.client = client or OllamaClient()
         self.stats = compute_fast_stats(df)
 
     def suggest_cleaning_plan(self) -> str:
@@ -75,5 +73,8 @@ class CleaningAgent:
             "df": df_clean,
             "success": True,
             "ops": ops_performed,
-            "response": "### ✅ Cleaning Complete\n\n" + "\n".join([f"- {opt}" for opt in ops_performed])
+            "rows_after": len(df_clean),
+            "cols_after": len(df_clean.columns),
+            "response": "### ✅ Cleaning Complete\n\n" + "\n".join([f"- {opt}" for opt in ops_performed]) + "\n\n*Note: The dataset in your current session has been updated.*",
+            "df_cleaned": True 
         }

@@ -7,26 +7,15 @@ Centralized configuration for model names, timeouts, thresholds, and system beha
 import os
 from typing import Final
 from dotenv import load_dotenv
-import streamlit as st
 
 # Load environment variables from .env if it exists
 load_dotenv()
 
-def _get_secret(env_key: str, st_key: str, default: str = "") -> str:
-    """Try environment first, then Streamlit secrets, then default."""
-    env_val = os.getenv(env_key)
-    if env_val:
-        return env_val
-    try:
-        return st.secrets.get(st_key, default)
-    except Exception:
-        return default
-
-# ── Environment variables (from .env or secrets) ──
-OLLAMA_BASE_URL: Final[str] = _get_secret("OLLAMA_BASE_URL", "OLLAMA_BASE_URL", "http://127.0.0.1:11434")
-OLLAMA_MODEL: Final[str] = _get_secret("OLLAMA_MODEL", "OLLAMA_MODEL", "qwen2.5-coder:latest")
-SESSION_SECRET: Final[str] = _get_secret("SESSION_SECRET", "SESSION_SECRET", "insecure-default-change-in-production")
-DEBUG: Final[bool] = _get_secret("DEBUG", "DEBUG", "false").lower() == "true"
+# ── Environment variables (from .env or os) ──
+OLLAMA_BASE_URL: Final[str] = os.getenv("OLLAMA_BASE_URL", "http://127.0.0.1:11434")
+OLLAMA_MODEL: Final[str] = os.getenv("OLLAMA_MODEL", "qwen2.5-coder:latest")
+SESSION_SECRET: Final[str] = os.getenv("SESSION_SECRET", "insecure-default-change-in-production")
+DEBUG: Final[bool] = os.getenv("DEBUG", "false").lower() == "true"
 
 # ── Paths (computed, never hardcoded) ──
 ROOT_DIR = os.path.dirname(os.path.abspath(__file__))

@@ -1,292 +1,166 @@
-"""
-Ollama API wrapper with streaming support and retry logic.
-
-Connects to a local Ollama instance for LLM inference via the /api/chat endpoint.
-"""
-
+import httpx
+import asyncio
 import json
 import logging
 import time
-from typing import Generator, Optional
-
-import requests
-from config import OLLAMA_TIMEOUT
+from typing import AsyncGenerator, Optional
 
 logger = logging.getLogger(__name__)
 
+# Import config values 
+from config import OLLAMA_BASE_URL, OLLAMA_MODEL, OLLAMA_TIMEOUT
 
-class OllamaConnectionError(Exception):
-    """Raised when Ollama server is unreachable."""
-    pass
+# ────────────────────────────────────────────
+# SYNCHRONOUS — use inside agents (run in thread pool by FastAPI)
+# ────────────────────────────────────────────
 
-
-class OllamaResponseError(Exception):
-    """Raised when Ollama returns an unexpected response."""
-    pass
-
-
-class OllamaClient:
-    """Client for the Ollama /api/chat API with retry and streaming support."""
-
-    def __init__(
-        self,
-        base_url: str = "http://localhost:11434",
-        model: str = "qwen2.5-coder:1.5b",
-        max_retries: int = 3,
-        timeout: int = OLLAMA_TIMEOUT,
-    ):
-        self.base_url = base_url.rstrip("/")
-        self.model = model
-        self.max_retries = max_retries
-        self.timeout = timeout
-        self._chat_url = f"{self.base_url}/api/chat"
-        self._session_log: list[dict] = []
-
-    # ── public API ────────────────────────────────────────────────────
-
-    def chat(
-        self,
-        messages: list[dict],
-        stream: bool = False,
-        temperature: float | None = None,
-        options: dict | None = None,
-    ) -> str:
-        """
-        Send a chat request and return the full assistant response as a string.
-
-        Args:
-            messages: List of {"role": ..., "content": ...} dicts.
-            stream: If True, streams internally but still returns full string.
-            temperature: Override default temperature (0.0-1.0).
-            options: Additional Ollama generation options.
-
-        Returns:
-            The assistant's reply text.
-        """
-        from datamind.security.prompt_guard import PromptGuard
-        from datamind.security.rate_limiter import RateLimiter
-        import streamlit as st
-        import logging
-
-        # Rate Limiting
-        if hasattr(st, 'session_state') and 'current_user' in st.session_state and st.session_state.current_user:
-            user_id = st.session_state.current_user['id']
-            if user_id:
-                rate_result = RateLimiter.check_ollama(user_id)
-                if not rate_result["allowed"]:
-                    return rate_result["message"]
-        
-        # PromptGuard Injection Scan
-        secured_messages = []
-        for msg in messages:
-            if msg["role"] == "user":
-                scan_res = PromptGuard.scan_for_injection(msg["content"])
-                if scan_res["threat_level"] == "high":
-                    logging.warning(f"HIGH RISK prompt injection blocked: {msg['content'][:100]}")
-                    return "I cannot process this request."
-                secured_messages.append({"role": "user", "content": scan_res["filtered_text"]})
-            elif msg["role"] == "system":
-                secured_messages.append({"role": "system", "content": PromptGuard.wrap_system_prompt(msg["content"])})
-            else:
-                secured_messages.append(msg)
-        
-        messages = secured_messages
-
-        if stream:
-            chunks = list(self.stream_chat(messages, temperature=temperature, options=options))
-            return "".join(chunks)
-
-        payload: dict = {
-            "model": self.model,
-            "messages": messages,
-            "stream": False,
+def call_ollama_sync(
+    system_prompt: str,
+    user_prompt: str,
+    model: str = None,
+    max_tokens: int = 800,
+    temperature: float = 0.3,
+    max_retries: int = 3,
+) -> Optional[str]:
+    model = model or OLLAMA_MODEL
+    payload = {
+        "model":  model,
+        "system": system_prompt,
+        "prompt": user_prompt,
+        "stream": False,
+        "options": {
+            "num_predict": max_tokens,
+            "temperature": temperature,
         }
-        # Apply options
-        gen_options = dict(options) if options else {}
-        if temperature is not None:
-            gen_options["temperature"] = temperature
-        if gen_options:
-            payload["options"] = gen_options
-
-        response_data = self._request_with_retry(payload)
-        content = response_data.get("message", {}).get("content", "")
-
-        self._log(messages, content)
-        return content
-
-    def stream_chat(
-        self,
-        messages: list[dict],
-        temperature: float | None = None,
-        options: dict | None = None,
-    ) -> Generator[str, None, None]:
-        """
-        Stream a chat response, yielding text chunks as they arrive.
-
-        Args:
-            messages: List of {"role": ..., "content": ...} dicts.
-            temperature: Override default temperature.
-            options: Additional Ollama generation options.
-
-        Yields:
-            Successive content chunks from the assistant.
-        """
-        from datamind.security.prompt_guard import PromptGuard
-        from datamind.security.rate_limiter import RateLimiter
-        import streamlit as st
-        import logging
-
-        # Rate Limiting
-        if hasattr(st, 'session_state') and 'current_user' in st.session_state and st.session_state.current_user:
-            user_id = st.session_state.current_user['id']
-            if user_id:
-                rate_result = RateLimiter.check_ollama(user_id)
-                if not rate_result["allowed"]:
-                    yield rate_result["message"]
-                    return
-        
-        # PromptGuard Injection Scan
-        secured_messages = []
-        for msg in messages:
-            if msg["role"] == "user":
-                scan_res = PromptGuard.scan_for_injection(msg["content"])
-                if scan_res["threat_level"] == "high":
-                    logging.warning(f"HIGH RISK prompt injection blocked: {msg['content'][:100]}")
-                    yield "I cannot process this request."
-                    return
-                secured_messages.append({"role": "user", "content": scan_res["filtered_text"]})
-            elif msg["role"] == "system":
-                secured_messages.append({"role": "system", "content": PromptGuard.wrap_system_prompt(msg["content"])})
-            else:
-                secured_messages.append(msg)
-        
-        messages = secured_messages
-
-        payload: dict = {
-            "model": self.model,
-            "messages": messages,
-            "stream": True,
-        }
-        gen_options = dict(options) if options else {}
-        if temperature is not None:
-            gen_options["temperature"] = temperature
-        if gen_options:
-            payload["options"] = gen_options
-
-        full_content = []
-
-        for attempt in range(1, self.max_retries + 1):
-            try:
-                resp = requests.post(
-                    self._chat_url,
-                    json=payload,
-                    stream=True,
-                    timeout=self.timeout,
-                    proxies={"http": None, "https": None}
+    }
+    for attempt in range(max_retries):
+        try:
+            with httpx.Client(timeout=OLLAMA_TIMEOUT) as client:
+                response = client.post(
+                    f"{OLLAMA_BASE_URL}/api/generate",
+                    json=payload
                 )
-                resp.raise_for_status()
+                response.raise_for_status()
+                data = response.json()
+                result = data.get("response", "").strip()
+                if result:
+                    return result
+                return None
+        except httpx.TimeoutException:
+            logger.warning(
+                f"Ollama timeout on attempt {attempt+1}/{max_retries}")
+            if attempt < max_retries - 1:
+                time.sleep(2 ** attempt)  # 1s, 2s, 4s
+        except httpx.ConnectError:
+            logger.error("Ollama not reachable at " + OLLAMA_BASE_URL)
+            return None
+        except Exception as e:
+            logger.error(f"Ollama error attempt {attempt+1}: {e}")
+            if attempt < max_retries - 1:
+                time.sleep(2 ** attempt)
+    return None
 
-                for line in resp.iter_lines(decode_unicode=True):
+# Keep backwards compatibility — old code calls call_ollama()
+def call_ollama(
+    model: str,
+    system_prompt: str,
+    user_prompt: str,
+    timeout: int = None,
+    max_retries: int = 3,
+    max_tokens: int = 800,
+    temperature: float = 0.3,
+) -> Optional[str]:
+    return call_ollama_sync(
+        system_prompt=system_prompt,
+        user_prompt=user_prompt,
+        model=model,
+        max_tokens=max_tokens,
+        temperature=temperature,
+        max_retries=max_retries,
+    )
+
+# ────────────────────────────────────────────
+# ASYNC STREAMING — use in FastAPI chat endpoint
+# ────────────────────────────────────────────
+
+async def stream_ollama(
+    system_prompt: str,
+    user_prompt: str,
+    model: str = None,
+    max_tokens: int = 300,
+    temperature: float = 0.3,
+) -> AsyncGenerator[str, None]:
+    model = model or OLLAMA_MODEL
+    payload = {
+        "model":  model,
+        "system": system_prompt,
+        "prompt": user_prompt,
+        "stream": True,
+        "options": {
+            "num_predict": max_tokens,
+            "temperature": temperature,
+        }
+    }
+    try:
+        async with httpx.AsyncClient(
+            timeout=httpx.Timeout(OLLAMA_TIMEOUT)
+        ) as client:
+            async with client.stream(
+                "POST",
+                f"{OLLAMA_BASE_URL}/api/generate",
+                json=payload
+            ) as response:
+                response.raise_for_status()
+                async for line in response.aiter_lines():
                     if not line:
                         continue
                     try:
                         chunk = json.loads(line)
+                        if chunk.get("done"):
+                            break
+                        text = chunk.get("response", "")
+                        if text:
+                            yield text
                     except json.JSONDecodeError:
                         continue
+    except httpx.ConnectError:
+        logger.error("Ollama not reachable for streaming")
+        yield "Ollama is not running. Please start Ollama and try again."
+    except httpx.TimeoutException:
+        logger.error("Ollama streaming timeout")
+        yield "Response timed out."
+    except Exception as e:
+        logger.error(f"Streaming error: {e}")
+        yield "Analysis unavailable. Please try again."
 
-                    token = chunk.get("message", {}).get("content", "")
-                    if token:
-                        full_content.append(token)
-                        yield token
+# ────────────────────────────────────────────
+# ASYNC NON-STREAMING — use when you need await but not streaming
+# ────────────────────────────────────────────
 
-                    if chunk.get("done"):
-                        break
+async def call_ollama_async(
+    system_prompt: str,
+    user_prompt: str,
+    model: str = None,
+    max_tokens: int = 800,
+    temperature: float = 0.3,
+) -> Optional[str]:
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(
+        None,
+        lambda: call_ollama_sync(
+            system_prompt, user_prompt,
+            model, max_tokens, temperature
+        )
+    )
 
-                self._log(messages, "".join(full_content))
-                return  # success — exit generator
+# ────────────────────────────────────────────
+# HEALTH CHECK
+# ────────────────────────────────────────────
 
-            except requests.ConnectionError:
-                raise OllamaConnectionError(
-                    f"Cannot connect to Ollama at {self.base_url}. "
-                    "Make sure Ollama is running (`ollama serve`)."
-                )
-            except requests.HTTPError as exc:
-                if attempt < self.max_retries:
-                    wait = 2 ** attempt
-                    logger.warning(
-                        "Ollama stream attempt %d/%d failed (%s), retrying in %ds…",
-                        attempt, self.max_retries, exc, wait
-                    )
-                    time.sleep(wait)
-                else:
-                    raise OllamaResponseError(
-                        f"Ollama returned an error after {self.max_retries} attempts: {exc}"
-                    ) from exc
-
-    def is_available(self) -> bool:
-        """Return True if the Ollama server is reachable."""
-        try:
-            resp = requests.get(f"{self.base_url}/api/tags", timeout=5, proxies={"http": None, "https": None})
-            return resp.status_code == 200
-        except requests.ConnectionError:
-            return False
-
-    def list_models(self) -> list[str]:
-        """Return a list of locally available model names."""
-        try:
-            resp = requests.get(f"{self.base_url}/api/tags", timeout=10, proxies={"http": None, "https": None})
-            resp.raise_for_status()
-            models = resp.json().get("models", [])
-            return [m["name"] for m in models]
-        except Exception:
-            return []
-
-    @property
-    def session_log(self) -> list[dict]:
-        """Return the session log for debugging."""
-        return list(self._session_log)
-
-    # ── internals ─────────────────────────────────────────────────────
-
-    def _request_with_retry(self, payload: dict) -> dict:
-        """POST with exponential-backoff retry."""
-        for attempt in range(1, self.max_retries + 1):
-            try:
-                logger.info(f"Ollama Request: {self._chat_url} - Payload: {payload}")
-                resp = requests.post(
-                    self._chat_url, json=payload, timeout=self.timeout, proxies={"http": None, "https": None}
-                )
-                if resp.status_code != 200:
-                    logger.error(f"Ollama Error Response: {resp.status_code} - {resp.text}")
-                resp.raise_for_status()
-                return resp.json()
-
-            except requests.ConnectionError:
-                raise OllamaConnectionError(
-                    f"Cannot connect to Ollama at {self.base_url}. "
-                    "Make sure Ollama is running (`ollama serve`)."
-                )
-            except requests.HTTPError as exc:
-                if attempt < self.max_retries:
-                    wait = 2 ** attempt
-                    logger.warning(
-                        "Ollama attempt %d/%d failed (%s), retrying in %ds…",
-                        attempt, self.max_retries, exc, wait,
-                    )
-                    time.sleep(wait)
-                else:
-                    raise OllamaResponseError(
-                        f"Ollama returned an error after {self.max_retries} attempts: {exc}"
-                    ) from exc
-
-        # Should never reach here, but just in case
-        raise OllamaResponseError("Exhausted retries without success.")
-
-    def _log(self, messages: list[dict], response: str) -> None:
-        """Append to session log for debugging."""
-        self._session_log.append({
-            "timestamp": time.time(),
-            "model": self.model,
-            "messages": messages,
-            "response": response,
-        })
+async def check_ollama_health() -> bool:
+    try:
+        async with httpx.AsyncClient(timeout=5) as client:
+            r = await client.get(f"{OLLAMA_BASE_URL}/api/tags")
+            return r.status_code == 200
+    except Exception:
+        return False

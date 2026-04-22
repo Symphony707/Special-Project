@@ -60,6 +60,7 @@ def initialize_database():
                 email TEXT UNIQUE NOT NULL COLLATE NOCASE,
                 password_hash TEXT NOT NULL,
                 is_admin INTEGER DEFAULT 0,
+                is_guest INTEGER DEFAULT 0,
                 is_active INTEGER DEFAULT 1,
                 failed_attempts INTEGER DEFAULT 0,
                 lockout_until TIMESTAMP NULL,
@@ -180,6 +181,10 @@ def initialize_database():
         conn.execute("""
             CREATE INDEX IF NOT EXISTS idx_patterns_user_file 
             ON learned_patterns(user_id, global_file_id, is_verified DESC, decay_weight DESC)
+        """)
+        conn.execute("""
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_patterns_unique 
+            ON learned_patterns(user_id, global_file_id, pattern_description)
         """)
 
         # Prediction history
@@ -380,6 +385,12 @@ def get_global_file_by_hash(file_hash) -> Optional[Dict]:
         row = cursor.fetchone()
         return dict(row) if row else None
 
+def get_global_file_by_id(file_id) -> Optional[Dict]:
+    with get_db_connection() as conn:
+        cursor = conn.execute("SELECT * FROM global_files WHERE id = ?", (file_id,))
+        row = cursor.fetchone()
+        return dict(row) if row else None
+
 def insert_global_file(file_hash, filename, fingerprint_json, row_count, col_count, domain) -> int:
     with get_db_connection() as conn:
         cursor = conn.execute("""
@@ -424,6 +435,12 @@ def get_user_files(user_id) -> List[Dict]:
             ORDER BY uf.uploaded_at DESC
         """, (user_id,))
         return [dict(row) for row in cursor.fetchall()]
+
+def get_user_file_count(user_id) -> int:
+    with get_db_connection() as conn:
+        cursor = conn.execute("SELECT COUNT(*) as cnt FROM user_files WHERE user_id = ?", (user_id,))
+        row = cursor.fetchone()
+        return row['cnt'] if row else 0
 
 def delete_user_file_ref(user_id, global_file_id):
     with get_db_connection() as conn:
@@ -597,7 +614,7 @@ def upsert_analytical_cache(global_file_id, summary_text: str, viz_json: str) ->
 def run_migrations():
     with get_db_connection() as conn:
         # Check if migration already ran
-        cursor = conn.execute("SELECT value FROM system_config WHERE key = 'migration_v2_done'")
+        cursor = conn.execute("SELECT value FROM system_config WHERE key = 'migration_v3_done'")
         result = cursor.fetchone()
         if result:
             return
@@ -607,8 +624,9 @@ def run_migrations():
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS failed_attempts INTEGER DEFAULT 0",
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS lockout_until TIMESTAMP NULL",
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS last_active TIMESTAMP NULL",
-            "ALTER TABLE users ADD COLUMN IF NOT EXISTS is_active INTEGER DEFAULT 1",
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS is_admin INTEGER DEFAULT 0",
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS is_guest INTEGER DEFAULT 0",
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS is_active INTEGER DEFAULT 1",
         ]
         for stmt in migration_statements:
             try:
@@ -619,5 +637,25 @@ def run_migrations():
         # Mark migration done
         conn.execute("""
             INSERT OR REPLACE INTO system_config (key, value, updated_at)
-            VALUES ('migration_v2_done', '1', CURRENT_TIMESTAMP)
+            VALUES ('migration_v3_done', '1', CURRENT_TIMESTAMP)
         """)
+
+        # Migration v4: Pattern Unique Index
+        cursor = conn.execute("SELECT value FROM system_config WHERE key = 'migration_v4_done'")
+        if not cursor.fetchone():
+            # Clean up duplicates if any
+            conn.execute("""
+                DELETE FROM learned_patterns 
+                WHERE id NOT IN (
+                    SELECT MIN(id) FROM learned_patterns 
+                    GROUP BY user_id, global_file_id, pattern_description
+                )
+            """)
+            conn.execute("""
+                CREATE UNIQUE INDEX IF NOT EXISTS idx_patterns_unique 
+                ON learned_patterns(user_id, global_file_id, pattern_description)
+            """)
+            conn.execute("""
+                INSERT OR REPLACE INTO system_config (key, value, updated_at)
+                VALUES ('migration_v4_done', '1', CURRENT_TIMESTAMP)
+            """)

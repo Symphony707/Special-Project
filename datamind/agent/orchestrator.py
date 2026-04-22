@@ -10,7 +10,6 @@ import difflib
 from typing import Any, Dict, Optional, List, Tuple
 
 import pandas as pd
-import streamlit as st
 
 from datamind.agent.summary_agent import SummaryAgent
 from datamind.agent.diagnostic_agent import DiagnosticAgent
@@ -18,22 +17,27 @@ from datamind.agent.viz_agent import VizAgent
 from datamind.agent.predict_agent import PredictAgent
 from datamind.agent.analyst_agent import AnalystAgent
 from datamind.agent.cleaning_agent import CleaningAgent
-from datamind.memory.session import get_dataframe, get_summary_text, get_chat_history
 from datamind.tools.stats import compute_fast_stats, DatasetStats
-from datamind.llm.ollama_client import OllamaClient
-from config import OLLAMA_BASE_URL, OLLAMA_MODEL
+from datamind.llm.ollama_client import call_ollama_sync
 
 logger = logging.getLogger(__name__)
 
 class Orchestrator:
-    """Master Intelligence Router."""
+    """Master Intelligence Router. Now stateless and backend-agnostic."""
 
-    def __init__(self, client: Optional[OllamaClient] = None):
-        self.client = client or OllamaClient()
-        self.df = get_dataframe()
+    def __init__(self, df: pd.DataFrame, user_id: Optional[int] = None):
+        self.df = df
+        self.user_id = user_id
         self.stats = compute_fast_stats(self.df) if self.df is not None else None
 
-    def route_query(self, query: str, fingerprint: Dict[str, Any] = None, file_id: Optional[int] = None, intent_override: Optional[str] = None) -> Dict[str, Any]:
+    def route_query(
+        self, 
+        query: str, 
+        fingerprint: Dict[str, Any] = None, 
+        file_id: Optional[int] = None, 
+        intent_override: Optional[str] = None,
+        chat_history: List[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
         """Classifies intent and routes to the optimal specialized agent."""
         if self.df is None:
             return {"success": False, "response": "No data active. Please upload a dataset first."}
@@ -44,8 +48,8 @@ class Orchestrator:
         # 2. Query Normalization (Fuzzy Column Mapping)
         normalized_query, target_col = self._normalize_and_extract_target(query)
         
-        # 3. Context Package Construction
-        history = get_chat_history()
+        # 3. Context (passed in, no longer from streamlit)
+        history = chat_history or []
         
         # 4. Routing
         if intent == "VISUALIZATION":
@@ -62,14 +66,13 @@ class Orchestrator:
                 }
             else:
                 return {
-                    "success": True, # Still success as the agent processed it
+                    "success": True,
                     "response": f"I analyzed the data but couldn't identify the right numeric column to build a {viz_type} chart. Could you specify the column name?",
                     "figures": [],
                     "category": "analysis"
                 }
 
         elif intent == "PREDICTION":
-            # 1. Distinguish between 'Hard ML' and 'Strategic Simulation'
             simulation_keywords = [
                 "how", "increase", "decrease", "what-if", "what happens", "should", "simulate", 
                 "if we", "growth", "scenario", "loss", "months", "years", "days", "impact", 
@@ -78,15 +81,12 @@ class Orchestrator:
             normalized_q_low = normalized_query.lower()
             is_simulation = any(x in normalized_q_low for x in simulation_keywords)
             
-            # Heuristic for scenario modeling: (e.g. "predict 10% change")
             if not is_simulation:
-                # Detect percentage patterns or temporal units
                 if re.search(r'\d+%', normalized_q_low) or any(x in normalized_q_low for x in ["month", "year", "day", "week"]):
                     is_simulation = True
             
             if is_simulation:
-                # Route to SummaryAgent's Strategic Forecasting Engine
-                agent = SummaryAgent(client=self.client)
+                agent = SummaryAgent()
                 res = agent.generate_predictions(self.df)
                 return {
                     "success": True,
@@ -96,9 +96,7 @@ class Orchestrator:
                     "figures": res.get("figures", []) or ([res["fig"]] if res.get("fig") else [])
                 }
             
-            # 2. Hard ML Mission
             agent = PredictAgent(self.df, self.stats)
-            # Determine mode based on keywords
             mode = "auto"
             if "cluster" in normalized_query: mode = "clustering"
             elif "forecast" in normalized_query: mode = "timeseries"
@@ -108,7 +106,7 @@ class Orchestrator:
             return agent.run_prediction_mission(target_col=target_col, mode=mode)
 
         elif intent == "SUMMARY":
-            agent = SummaryAgent(client=self.client)
+            agent = SummaryAgent()
             dossier = agent.summarize_dossier(self.df)
             return {
                 "success": True, 
@@ -119,7 +117,7 @@ class Orchestrator:
             }
 
         elif intent == "CLEANING":
-            agent = CleaningAgent(self.df, self.client)
+            agent = CleaningAgent(self.df)
             if any(x in normalized_query for x in ["fix", "apply", "automatic"]):
                 res = agent.apply_auto_clean()
                 return {"success": True, "response": res["response"], "category": "analysis"}
@@ -128,11 +126,18 @@ class Orchestrator:
         # DEFAULT: Analysis (Universal Reasoning)
         agent = AnalystAgent(
             df=self.df, 
-            client=self.client, 
             file_id=file_id, 
-            fingerprint=fingerprint
+            fingerprint=fingerprint,
+            user_id=getattr(self, 'user_id', None)
         )
-        return agent.analyze(query, conversation_history=history)
+        res = agent.analyze(query, conversation_history=history)
+        
+        # If the analyst is talking about the prediction model, mark as simulation 
+        # so the lab UI can sync if it wants to.
+        if any(x in query.lower() for x in ["model", "accuracy", "prediction", "forecast", "importance", "driver"]):
+            res["category"] = "simulation"
+            
+        return res
 
     def _classify_intent(self, query: str) -> str:
         """Determines the primary analytical intent."""
@@ -155,13 +160,11 @@ class Orchestrator:
         target = None
         normalized_query = query
         
-        # Priority 1: Exact Match
         for col in self.df.columns:
             if col.lower() in words:
                 target = col
                 break
         
-        # Priority 2: Fuzzy Match
         if not target:
             for word in words:
                 if len(word) < 4: continue

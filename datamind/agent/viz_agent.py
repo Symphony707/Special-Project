@@ -1,6 +1,6 @@
 """
 Visualization Agent for DataMind v4.0
-Delegates chart generation to tools/chart_builder.py.
+Delegates chart generation to tools/chart_builder.py. Stateless and backend-agnostic.
 """
 
 from __future__ import annotations
@@ -18,7 +18,6 @@ from datamind.tools.chart_builder import (
     build_prediction_results
 )
 from datamind.tools.stats import compute_fast_stats, DatasetStats
-from datamind.memory.session import set_pre_generated_chart
 
 logger = logging.getLogger(__name__)
 
@@ -29,31 +28,51 @@ class VizAgent:
         self.df = df
         self.stats = stats or compute_fast_stats(df)
 
-    def generate_and_cache_top_charts(self):
-        """Pre-generate the 3 most useful charts for the cache."""
+    def generate_top_charts(self) -> Dict[str, Any]:
+        """Pre-generate the 3 most useful charts. Returns a dict of serialized figures."""
+        figs = {}
+        
         # 1. Distribution of top numeric column
         if self.stats.column_types["numeric"]:
             top_col = self.stats.top_columns[0]
-            fig = build_distribution_chart(self.df, top_col)
-            set_pre_generated_chart(f"dist_{top_col}", fig)
+            try:
+                fig = build_distribution_chart(self.df, top_col)
+                if fig: figs[f"dist_{top_col}"] = fig.to_dict()
+            except Exception as e:
+                logger.warning(f"Failed to generate distribution chart: {e}")
 
         # 2. Correlation Heatmap
         if len(self.stats.column_types["numeric"]) >= 2:
-            fig = build_correlation_heatmap(self.df)
-            set_pre_generated_chart("corr_heatmap", fig)
+            try:
+                fig = build_correlation_heatmap(self.df)
+                if fig: figs["corr_heatmap"] = fig.to_dict()
+            except Exception as e:
+                logger.warning(f"Failed to generate correlation heatmap: {e}")
 
         # 3. Null Map
-        fig = build_null_map(self.df)
-        set_pre_generated_chart("null_map", fig)
+        try:
+            fig = build_null_map(self.df)
+            if fig: figs["null_map"] = fig.to_dict()
+        except Exception as e:
+            logger.warning(f"Failed to generate null map: {e}")
+            
+        return figs
 
     def handle_request(self, chart_type: str, **kwargs) -> Optional[Figure]:
         """Route specific chart requests to builders."""
-        if chart_type == "distribution":
-            return build_distribution_chart(self.df, kwargs.get("column"))
-        elif chart_type == "correlation":
-            return build_correlation_heatmap(self.df)
-        elif chart_type == "time_series":
-            return build_time_series_chart(self.df, kwargs.get("date_col"), kwargs.get("value_col"))
-        elif chart_type == "missing":
-            return build_null_map(self.df)
+        try:
+            fig = None
+            if chart_type == "distribution":
+                fig = build_distribution_chart(self.df, kwargs.get("column"))
+            elif chart_type == "correlation":
+                fig = build_correlation_heatmap(self.df)
+            elif chart_type == "time_series":
+                fig = build_time_series_chart(self.df, kwargs.get("date_col"), kwargs.get("value_col"))
+            elif chart_type == "missing":
+                fig = build_null_map(self.df)
+            
+            return fig.to_dict() if fig else None
+        except Exception as e:
+            logger.error(f"Chart generation error ({chart_type}): {e}")
+            
         return None

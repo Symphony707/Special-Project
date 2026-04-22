@@ -1,0 +1,62 @@
+:root {
+  /* Backgrounds — layered depth system */
+  --bg-base:          #080e1f;
+  --bg-surface:       #0d1630;
+  --bg-card:          #111d3a;
+  --bg-elevated:      #162248;
+  --bg-overlay:       #1a2856;
+  --bg-hover:         #1e2f5e;
+
+  /* Borders */
+  --border-subtle:    rgba(255,255,255,0.055);
+  --border-default:   rgba(255,255,255,0.09);
+  --border-strong:    rgba(255,255,255,0.14);
+  --border-cyan:      rgba(6,210,255,0.30);
+  --border-glow:      rgba(6,210,255,0.50);
+
+  /* Accents — vibrant purple system */
+  --cyan:             #7c6fff; /* Redirecting primary accent to purple */
+  --intelligence-purple: #7c6fff;
+  --cyan-dim:         #6366f1;
+  --cyan-faint:       rgba(124,111,255,0.08);
+  --cyan-faint2:      rgba(124,111,255,0.14);
+  --purple:           #7c6fff;
+  --purple-faint:     rgba(124,111,255,0.10);
+  --green:            #00e096;
+  --green-faint:      rgba(0,224,150,0.10);
+  --red:              #ff4d6d;
+  --red-faint:        rgba(255,77,109,0.10);
+  --amber:            #ffb547;
+  --amber-faint:      rgba(255,181,71,0.10);
+
+  /* Text */
+  --text-primary:     #ffffff;
+  --text-secondary:   #8899bb;
+  --text-muted:       #4c5567;
+  --text-cyan:        #7c6fff;
+  --text-green:       #00e096;
+  --text-red:         #ff4d6d;
+  --text-amber:       #ffb547;
+
+  /* Shadows */
+  --shadow-sm:        0 2px 8px rgba(0,0,0,0.35);
+  --shadow-md:        0 4px 20px rgba(0,0,0,0.45);
+  --shadow-lg:        0 8px 40px rgba(0,0,0,0.55);
+  --shadow-cyan:      0 4px 24px rgba(6,210,255,0.18);
+  --shadow-card-glow: 0 0 0 1px rgba(6,210,255,0.08),
+                      0 4px 20px rgba(0,0,0,0.45);
+
+  /* Layout */
+  --sidebar-width:      220px;
+  --sidebar-collapsed:  68px;
+  --header-height:      58px;
+  --content-padding:    24px 28px;
+  --card-radius:        32px;
+  --card-radius-sm:     16px;
+  --card-radius-lg:     40px;
+
+  /* Animation */
+  --transition-fast:    0.12s ease;
+  --transition-base:    0.2s ease;
+  --transition-slow:    0.35s cubic-bezier(0.4,0,0.2,1);
+}

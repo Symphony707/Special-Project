@@ -12,15 +12,15 @@ import pandas as pd
 import numpy as np
 
 import database as db
-from datamind.llm.ollama_client import OllamaClient
+from datamind.llm.ollama_client import call_ollama_sync
 
 logger = logging.getLogger(__name__)
 
 class PatternLearner:
     """Self-learning loop for analytical pattern discovery (user+file scoped)."""
 
-    def __init__(self, client: Optional[OllamaClient] = None):
-        self.client = client or OllamaClient()
+    def __init__(self):
+        pass
 
     def extract_statistical_patterns(self, df: pd.DataFrame, file_id: int, user_id: int):
         """Discovers statistical patterns in the dataset autonomously."""
@@ -47,7 +47,7 @@ class PatternLearner:
             q3 = df[col].quantile(0.75)
             iqr = q3 - q1
             outliers = df[(df[col] < (q1 - 1.5 * iqr)) | (df[col] > (q3 + 1.5 * iqr))]
-            if len(outliers) > 0 and len(outliers) < (len(df) * 0.05): # Only if < 5% are outliers
+            if len(outliers) > 0 and len(outliers) < (len(df) * 0.05):
                 patterns.append({
                     "type": "outlier",
                     "desc": f"Significant volumetric outliers identified in '{col}' beyond standard deviation.",
@@ -92,18 +92,23 @@ Example: 'Revenue shows a strong cyclical peak every 3rd quarter.'
 Output only the pattern string, no intro."""
 
         try:
-            pattern_desc = self.client.chat([{"role": "user", "content": prompt}]).strip()
-            pattern_desc = re.sub(r'^Pattern:\s*', '', pattern_desc, flags=re.IGNORECASE)
-            
-            if len(pattern_desc) > 10 and len(pattern_desc) < 200:
-                db.upsert_pattern(
-                    user_id=user_id,
-                    global_file_id=file_id,
-                    pattern_type="domain_rule",
-                    description=pattern_desc,
-                    columns_json="[]", # Could be parsed from pattern_desc if needed
-                    confidence=0.7
-                )
-                logger.info(f"Narratively extracted pattern for user {user_id} on file {file_id}: {pattern_desc}")
+            pattern_desc = call_ollama_sync(
+                system_prompt="You are an Intelligence Extraction Core.",
+                user_prompt=prompt
+            )
+            if pattern_desc:
+                pattern_desc = pattern_desc.strip()
+                pattern_desc = re.sub(r'^Pattern:\s*', '', pattern_desc, flags=re.IGNORECASE)
+                
+                if len(pattern_desc) > 10 and len(pattern_desc) < 200:
+                    db.upsert_pattern(
+                        user_id=user_id,
+                        global_file_id=file_id,
+                        pattern_type="domain_rule",
+                        description=pattern_desc,
+                        columns_json="[]",
+                        confidence=0.7
+                    )
+                    logger.info(f"Narratively extracted pattern for user {user_id} on file {file_id}: {pattern_desc}")
         except Exception as e:
             logger.warning(f"Narrative extraction failed: {e}")

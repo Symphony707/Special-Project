@@ -14,7 +14,6 @@ import logging
 from typing import Any, Dict, Optional, Tuple
 
 import pandas as pd
-import streamlit as st
 import chardet
 
 logger = logging.getLogger(__name__)
@@ -26,24 +25,31 @@ PII_KEYWORDS = [
     "credit_card", "account_number", "mobile"
 ]
 
+class FileLoadError(Exception):
+    """Custom exception for file loading failures."""
+    pass
+
 class UniversalFileLoader:
-    """Universal data ingestion engine with guardrails and fingerprinting."""
+    """Universal data ingestion engine with guardrails and fingerprinting. Stateless and backend-agnostic."""
 
     @staticmethod
-    def load(file_bytes: bytes, file_name: str) -> Optional[pd.DataFrame]:
-        """Load file bytes into a DataFrame with safety checks."""
+    def load(file_bytes: bytes, file_name: str, user_id: Optional[int] = None) -> pd.DataFrame:
+        """Load file bytes into a DataFrame with safety checks. Raises FileLoadError on failure."""
         from datamind.security.upload_guard import UploadGuard
+        
+        # 1. Pre-read Validation
         guard_result = UploadGuard.validate_before_read(file_bytes, file_name)
         if not guard_result["safe"]:
-            import logging
-            logging.error(f"UploadGuard rejected file {file_name}: {guard_result['error']}")
-            from database import log_event
-            # Try to log if session exists
-            if hasattr(st.session_state, 'current_user') and st.session_state.current_user:
-                log_event(st.session_state.current_user['id'], 'invalid_file_type', guard_result['error'])
-            st.error(f"❌ {guard_result['error']}")
-            st.stop()
-            return None
+            error_msg = guard_result.get("error", "Unknown validation error before read.")
+            logger.error(f"UploadGuard rejected file {file_name}: {error_msg}")
+            
+            if user_id:
+                try:
+                    from database import log_event
+                    log_event(user_id, 'invalid_file_type', error_msg)
+                except ImportError:
+                    pass
+            raise FileLoadError(error_msg)
 
         ext = os.path.splitext(file_name)[1].lower()
         df = None
@@ -58,25 +64,25 @@ class UniversalFileLoader:
             elif ext == ".parquet":
                 df = pd.read_parquet(io.BytesIO(file_bytes))
             else:
-                st.error(f"❌ Unsupported file format: {ext}")
-                st.stop()
-                return None
+                raise FileLoadError(f"Unsupported file format: {ext}")
         except Exception as e:
-            st.error(f"❌ Error reading file: {str(e)}")
-            st.stop()
-            return None
+            if isinstance(e, FileLoadError): raise
+            raise FileLoadError(f"Error reading {ext} file: {str(e)}")
 
         if df is not None:
+            # 2. Post-read Validation
             guard_result = UploadGuard.validate_after_read(df, file_name)
             if not guard_result["safe"]:
-                import logging
-                logging.error(f"UploadGuard rejected parsed file {file_name}: {guard_result['error']}")
-                from database import log_event
-                if hasattr(st.session_state, 'current_user') and st.session_state.current_user:
-                    log_event(st.session_state.current_user['id'], 'file_bomb_detected', guard_result['error'])
-                st.error(f"❌ {guard_result['error']}")
-                st.stop()
-                return None
+                error_msg = guard_result.get("error", "Unknown validation error after read.")
+                logger.error(f"UploadGuard rejected parsed file {file_name}: {error_msg}")
+                
+                if user_id:
+                    try:
+                        from database import log_event
+                        log_event(user_id, 'file_bomb_detected', error_msg)
+                    except ImportError:
+                        pass
+                raise FileLoadError(error_msg)
             
             # 3. Data Coercion
             df = UniversalFileLoader._run_data_coercer(df)
@@ -86,7 +92,6 @@ class UniversalFileLoader:
     @staticmethod
     def _load_csv(file_bytes: bytes) -> pd.DataFrame:
         """Helper to load CSV with auto-detection of encoding and delimiter."""
-        # Detect encoding
         rawdata = file_bytes[:10000] # Sample for detection
         result = chardet.detect(rawdata)
         enc = result['encoding'] or 'utf-8'
@@ -114,35 +119,28 @@ class UniversalFileLoader:
             df.drop(columns=cols_to_drop, inplace=True)
 
         for col in df.columns:
-            # Skip if already numeric
             if pd.api.types.is_numeric_dtype(df[col]):
                 continue
             
-            # Try numeric cleaning (Currencies, percentages)
             if df[col].dtype == "object":
                 sample = df[col].dropna().astype(str).head(100)
                 if sample.empty: continue
                 
-                # Check for currency symbols or percentages
                 if sample.str.contains(r'[$£₹€%,\']', regex=True).any():
                     cleaned = df[col].astype(str).str.replace(r'[$£₹€%,\']', '', regex=True)
-                    # Convert percentages
                     is_pct = sample.str.contains('%').any()
                     try:
                         numeric_s = pd.to_numeric(cleaned, errors='coerce')
                         if is_pct:
                             numeric_s = numeric_s / 100
-                        # If more than 50% successfully converted, keep it
                         if numeric_s.notnull().mean() > 0.5:
                             df[col] = numeric_s
                             continue
                     except:
                         pass
             
-            # Try date conversion
             if df[col].dtype == "object":
                 try:
-                    # Check if string looks like a date first to avoid false positives
                     if df[col].dropna().astype(str).str.contains(r'\d{2,4}[-/]\d{1,2}[-/]\d{1,2}').any():
                         df[col] = pd.to_datetime(df[col], errors='coerce')
                 except:
@@ -163,12 +161,10 @@ class UniversalFileLoader:
             elif pd.api.types.is_datetime64_any_dtype(df[col]): dtype_label = "datetime"
             elif pd.api.types.is_bool_dtype(df[col]): dtype_label = "boolean"
             
-            # ID detection heuristic
             unique_count = int(df[col].nunique())
             if unique_count == len(df) and len(df) > 100:
                 dtype_label = "id_like"
 
-            # PII detection
             is_pii = any(k in col.lower() for k in PII_KEYWORDS)
             if is_pii:
                 pii_columns.append(col)
@@ -182,7 +178,6 @@ class UniversalFileLoader:
                 "is_pii": is_pii
             }
 
-        # Domain Detection (Simple Keywords)
         full_text = " ".join(df.columns).lower()
         domain = "generic"
         if any(x in full_text for x in ["price", "revenue", "sale", "cost", "invoice"]): domain = "finance"
@@ -192,13 +187,9 @@ class UniversalFileLoader:
         elif any(x in full_text for x in ["shipment", "warehouse", "tracking"]): domain = "logistics"
         elif any(x in full_text for x in ["student", "grade", "course"]): domain = "education"
 
-        # Unique hash
         fingerprint_ids = sorted([f"{c}{cols_meta[c]['dtype']}" for c in df.columns])
         hash_str = "|".join(fingerprint_ids)
         fingerprint_hash = hashlib.sha256(hash_str.encode()).hexdigest()
-
-        if pii_detected:
-            st.warning(f"⚠️ Sensitive columns detected: {pii_columns}. This data will not be stored. Analysis runs in-memory only.")
 
         return {
             "version": 2,
@@ -207,7 +198,8 @@ class UniversalFileLoader:
             "detected_domain": domain,
             "has_datetime_column": any(v["dtype"] == "datetime" for v in cols_meta.values()),
             "fingerprint_hash": fingerprint_hash,
-            "pii_detected": pii_detected
+            "pii_detected": pii_detected,
+            "pii_columns": pii_columns
         }
 
     @staticmethod
@@ -218,4 +210,3 @@ class UniversalFileLoader:
             if col_info.get("is_pii"):
                 col_info["sample_values"] = ["[REDACTED]", "[REDACTED]", "[REDACTED]"]
         return masked
-

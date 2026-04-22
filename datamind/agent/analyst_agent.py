@@ -11,9 +11,8 @@ import json
 from typing import Any, Dict, List, Optional, Tuple
 
 import pandas as pd
-import streamlit as st
 
-from datamind.llm.ollama_client import OllamaClient
+from datamind.llm.ollama_client import call_ollama_sync
 from datamind.tools.stats import compute_fast_stats
 from config import OLLAMA_MODEL, CHAT_TIMEOUT
 
@@ -27,12 +26,12 @@ logger = logging.getLogger(__name__)
 class AnalystAgent:
     """Universal Unsupervised Analyst Agent with User-Scoped Intelligence."""
 
-    def __init__(self, df: pd.DataFrame, client: Optional[OllamaClient] = None, 
+    def __init__(self, df: pd.DataFrame, 
                  model: str = OLLAMA_MODEL, file_id: Optional[int] = None,
                  fingerprint: Optional[Dict[str, Any]] = None,
                  user_id: Optional[int] = None):
         self.df = df
-        self.client = client or OllamaClient(model=model, timeout=CHAT_TIMEOUT)
+        self.model = model
         self.file_id = file_id
         self.user_id = user_id
         self.fingerprint = fingerprint or {}
@@ -51,11 +50,11 @@ class AnalystAgent:
             prompt = self._build_unsupervised_prompt(matched_query, conversation_history, prior_intel)
             
             # 4. LLM Reasoning
-            with st.spinner("Decoding dataset patterns..."):
-                response = self.client.chat([
-                    {"role": "system", "content": self._get_system_persona()},
-                    {"role": "user", "content": prompt}
-                ])
+            response = call_ollama_sync(
+                system_prompt=self._get_system_persona(),
+                user_prompt=prompt,
+                model=self.model
+            )
             
             # 5. Split and Extract Artifacts
             result_parts = self._split_response(response)
@@ -93,14 +92,30 @@ class AnalystAgent:
         return updated_query
 
     def _get_prior_intelligence(self) -> str:
-        """Retrieves user-scoped learned patterns from memory."""
+        """Retrieves user-scoped learned patterns and latest prediction results."""
         intel = ""
         if db and self.file_id and self.user_id:
+            # 1. Learned Patterns
             patterns = db.get_patterns_for_user_file(self.user_id, self.file_id)
             if patterns:
-                intel = "\n\n### Prior Strategic Intelligence:\n"
+                intel += "\n\n### Prior Strategic Intelligence (Learned Patterns):\n"
                 for p in patterns[:5]:
                     intel += f"- {p['pattern_description']} (Confidence: {p['confidence_score']:.2f})\n"
+            
+            # 2. Latest Prediction Result
+            pred_history = db.get_prediction_history(self.user_id, self.file_id)
+            if pred_history:
+                latest = pred_history[0]
+                intel += "\n\n### Active Predictive Context:\n"
+                intel += f"- **Target Dimension**: {latest['target_column']}\n"
+                intel += f"- **Best Neural Architecture**: {latest['model_used']}\n"
+                intel += f"- **Verified Accuracy/R²**: {latest.get('accuracy_score', 0):.1%}\n"
+                if latest.get('feature_importances'):
+                    try:
+                        fi = json.loads(latest['feature_importances'])
+                        top_3 = ", ".join([f"{x['Feature']}" for x in fi[:3]])
+                        intel += f"- **Top Intelligence Drivers**: {top_3}\n"
+                    except: pass
         return intel
 
     def _build_unsupervised_prompt(self, query: str, history: List[Dict], intel: str) -> str:

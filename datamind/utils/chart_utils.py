@@ -1,70 +1,62 @@
 """
-Utilities to capture matplotlib / seaborn figures as base64 PNG strings.
+DataMind v5.0 - Visualization Utilities
+Unified Plotly themes and chart generation helpers.
 """
 
 from __future__ import annotations
-
-import base64
-import io
 from typing import Any
+import plotly.graph_objects as go
 
-import matplotlib  # type: ignore[import-untyped]
-matplotlib.use("Agg")  # non-interactive backend
-import matplotlib.pyplot as plt  # type: ignore[import-untyped]
-
-
-def figure_to_base64(fig: plt.Figure) -> str:
-    """Convert a single matplotlib Figure to a base64-encoded PNG string."""
-    buf = io.BytesIO()
-    fig.savefig(buf, format="png", dpi=150, bbox_inches="tight", facecolor=fig.get_facecolor())
-    buf.seek(0)
-    encoded = base64.b64encode(buf.read()).decode("utf-8")
-    buf.close()
-    return encoded
-
-
-def figures_to_base64(figures: list[plt.Figure]) -> list[str]:
-    """Convert a list of matplotlib Figures to base64 PNG strings."""
-    results = []
-    for fig in figures:
-        try:
-            results.append(figure_to_base64(fig))
-        except Exception:
-            pass  # skip broken figures
-    return results
-
-
-def capture_figures(namespace: dict[str, Any]) -> list[str]:
+def apply_datamind_theme(fig: Any) -> Any:
     """
-    Scan an exec namespace for matplotlib Figure objects and convert them to base64.
-
-    Also captures any figures registered with pyplot's figure manager.
-    Closes all figures after capture to free memory.
-
-    Args:
-        namespace: The namespace dict from exec().
-
-    Returns:
-        List of base64 PNG strings.
+    Apply the definitive DataMind design system theme to a Plotly figure.
+    This ensures consistent dark-mode aesthetics across the platform.
     """
-    collected_figures: list[plt.Figure] = []
-
-    # 1. Collect figures from pyplot's figure manager
-    fig_nums = plt.get_fignums()
-    for num in fig_nums:
-        fig = plt.figure(num)
-        if fig not in collected_figures:
-            collected_figures.append(fig)
-
-    # 2. Scan namespace for any Figure objects not in the manager
-    for val in namespace.values():
-        if isinstance(val, plt.Figure) and val not in collected_figures:
-            collected_figures.append(val)
-
-    # 3. Convert to base64
-    encoded = figures_to_base64(collected_figures)
-
-    # 4. Close all figures to free memory
-    plt.close("all")
-
-    return encoded
+    fig.update_layout(
+        paper_bgcolor='rgba(0,0,0,0)',
+        plot_bgcolor='rgba(0,0,0,0)',
+        font=dict(family='DM Sans, sans-serif', color='#94a3b8', size=12),
+        margin=dict(l=0, r=0, t=40, b=0),
+        legend=dict(
+            bgcolor='rgba(13,21,38,0.8)',
+            bordercolor='rgba(255,255,255,0.05)',
+            borderwidth=1,
+            font=dict(color='#f1f5f9', size=11),
+            orientation="h",
+            yanchor="bottom",
+            y=1.02,
+            xanchor="right",
+            x=1
+        ),
+        xaxis=dict(
+            gridcolor='rgba(255,255,255,0.03)',
+            zerolinecolor='rgba(255,255,255,0.06)',
+            tickfont=dict(color='#475569', size=11),
+            showgrid=True,
+            linecolor='rgba(255,255,255,0.05)'
+        ),
+        yaxis=dict(
+            gridcolor='rgba(255,255,255,0.03)',
+            zerolinecolor='rgba(255,255,255,0.06)',
+            tickfont=dict(color='#475569', size=11),
+            showgrid=True,
+            linecolor='rgba(255,255,255,0.05)'
+        ),
+        colorway=['#06b6d4', '#818cf8', '#10b981', '#f43f5e', '#f59e0b', '#ec4899'],
+        hoverlabel=dict(
+            bgcolor='#111d35',
+            font_size=12,
+            font_family="DM Sans",
+            bordercolor='rgba(6,182,212,0.3)'
+        ),
+        dragmode='pan'
+    )
+    
+    # Update traces for better look
+    if hasattr(fig, 'update_traces'):
+        fig.update_traces(
+            marker=dict(line=dict(width=0)),
+            hoverlabel=dict(namelength=-1)
+        )
+        
+    return fig

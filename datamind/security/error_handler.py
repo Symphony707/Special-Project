@@ -2,6 +2,8 @@ import logging, traceback, uuid
 from datetime import datetime
 import os
 
+logger = logging.getLogger(__name__)
+
 # Ensure data dir exists for logging
 os.makedirs('data', exist_ok=True)
 
@@ -29,7 +31,7 @@ class SafeErrorHandler:
                user_id: int = None, show_in_ui: bool = True) -> str:
         error_id = str(uuid.uuid4())[:8].upper()
 
-        logging.error(
+        logger.error(
             f"[{error_id}] Context={context} | User={user_id} | "
             f"Type={type(exception).__name__} | "
             f"Detail={str(exception)}\n"
@@ -52,7 +54,6 @@ class SafeErrorHandler:
                        f" (Ref: {error_id})")
 
         if show_in_ui:
-            import streamlit as st
-            st.error(f"⚠️ {user_message}")
+            logger.error(f"UI Error displayed: {user_message}")
 
         return user_message

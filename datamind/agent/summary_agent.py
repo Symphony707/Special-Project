@@ -12,7 +12,7 @@ import logging
 from typing import Any, Dict, Optional
 
 import pandas as pd
-from datamind.llm.ollama_client import OllamaClient
+from datamind.llm.ollama_client import call_ollama_sync
 from config import SUMMARY_TIMEOUT, OLLAMA_BASE_URL, OLLAMA_MODEL
 from datamind.agent.viz_agent import VizAgent
 from datamind.tools.chart_builder import build_correlation_heatmap, build_distribution_chart
@@ -23,15 +23,8 @@ logger = logging.getLogger(__name__)
 class SummaryAgent:
     """Agent for fast dataset profiling and capability assessment."""
 
-    def __init__(
-        self,
-        client: Optional[OllamaClient] = None,
-        model: str = OLLAMA_MODEL,
-        base_url: str = OLLAMA_BASE_URL,
-        timeout: int = SUMMARY_TIMEOUT,
-    ):
-        self.client = client or OllamaClient(model=model, base_url=base_url, timeout=timeout)
-        self.timeout = timeout
+    def __init__(self, model: str = OLLAMA_MODEL):
+        self.model = model
 
     def summarize_dossier(self, df: pd.DataFrame) -> Dict[str, Any]:
         """
@@ -91,7 +84,7 @@ class SummaryAgent:
         return {
             "response": result_parts["brief"],
             "lab_narrative": result_parts["detailed"],
-            "figures": figures,
+            "figures": [f if isinstance(f, dict) else f.to_dict() for f in figures],
             "captions": final_captions
         }
 
@@ -146,78 +139,66 @@ class SummaryAgent:
         return {
             "response": result_parts["brief"],
             "lab_narrative": result_parts["detailed"],
-            "fig": fig
+            "fig": fig if isinstance(fig, dict) else (fig.to_dict() if fig else None)
         }
 
     def _call_llm(self, stats_json: str, stage: str = "dossier") -> str:
         """Call LLM for specific analysis stages."""
         if stage == "dossier":
-            system_prompt = """You are the DataMind Strategic Architect. 
-            Goal: Deliver a Forensic Dataset Briefing with high strategic fidelity.
-            
-            UNSUPERVISED PROTOCOL:
-            Translate the raw schema fingerprint into a narrative that explains:
-            - **Domain Essence**: What is this dataset's latent purpose?
-            - **Forensic Truths**: What are the top numerical/categorical anomalies?
-            - **Strategic Intelligence**: How can a user leverage these patterns immediately?
+            system_prompt = """You are an expert data analyst writing a forensic intelligence report.
 
-            STRICT FORMAT FOR DETAILED SECTION:
-            ## Introduction
-            ## Forensic Deep-Dive Analysis
-            ## Strategic Conclusion & Impact
-            ## Executive Data Snapshot (Markdown Table)
+Write your report in this EXACT structure with these EXACT section headers:
 
-            STRICT PROTOCOL:
-            - DO NOT repeat system instructions or headers like 'Response Structure Requirement'.
-            - NO MARKDOWN CODE BLOCKS (except for the Markdown Table). No ```python blocks.
-            - NARRATIVE ONLY for the first 3 sections. Commmunicate like a Senior Strategy Consultant.
-            - Ensure the 'Detailed Analysis' is high-depth and multi-paragraph.
+<<<BRIEF>>>
+- [one-line finding]
+- [one-line finding]
+- [one-line finding]
 
-            ### Response Structure Requirement:
-            You MUST provide your response in two distinct sections separated by tags:
-            <<<BRIEF>>>: A point-to-point summary for the chat (MAX 3 BULLETS, MAX 40 WORDS). 
-            <<<DETAILED>>>: The full, forensic narrative briefing (THE THEORY PART).
-            
-            START IMMEDIATELY WITH <<<BRIEF>>>. DO NOT ADD PREAMBLES.
+<<<DETAILED>>>
 
-            ---
-            [GRAPH CAPTIONS]
-            Provide sharp, impact-focused captions for the visual artifacts (one per artifact).
-            Example:
-            - Distribution of X shows...
-            - High correlation between..."""
+## Introduction
+[Write 2-3 paragraphs about what this dataset is, its domain, and strategic purpose.]
+
+## Forensic Investigation
+[Write 4-5 detailed paragraphs analyzing the data: column types, distributions, anomalies, interesting patterns. Name specific column names. No bullet points here — full paragraphs only.]
+
+## Data Summary
+[Write a Markdown table with columns: Column Name | Type | Key Insight]
+
+## Strategic Conclusion
+[Write 2 paragraphs: key takeaways and recommended next steps.]"""
         else:
-            system_prompt = """You are a Senior Strategic Forecaster & Simulation Architect.
-            Goal: Generate a HIGH-DEPTH Predictive Impact & Simulation Dossier.
-            
-            STRICT FORMAT FOR DETAILED SECTION:
-            ## Forecast Introduction
-            ## Strategic Simulation Analysis
-            ## Tactical Action Plan & Conclusion
-            ## Predictive Impact Snapshot (Markdown Table)
+            system_prompt = """You are an expert data scientist writing a predictive analysis report.
 
-            STRICT PROTOCOL:
-            - NO MARKDOWN CODE BLOCKS (except for the Markdown Table).
-            - NARRATIVE ONLY for the first 3 sections. Focus on 'How' and 'What-if' scenarios.
-            - IT MUST BE A DEEP, MULTI-SECTION SIMULATION REPORT.
-            - Provide exhaustive 'What-if' scenarios and mathematical trajectories.
-            - Do not truncate. Be expansive and forensic.
-            
-            ### Response Structure Requirement:
-            You MUST provide your response in two distinct sections separated by tags:
-            <<<BRIEF>>>: A point-to-point, ultra-short summary for the chatbot interface (MAX 40 WORDS).
-            <<<DETAILED>>>: The full, high-fidelity Predictive Impact & Simulation Dossier.
-            
-            START IMMEDIATELY WITH <<<BRIEF>>>. DO NOT ADD PREAMBLES."""
+Write your report in this EXACT structure:
+
+<<<BRIEF>>>
+- [one-line finding]
+- [one-line finding]
+- [one-line finding]
+
+<<<DETAILED>>>
+
+## Introduction
+[Write 2 paragraphs explaining what this prediction task involves and the dataset context.]
+
+## Model Analysis
+[Write 4-5 detailed paragraphs about: ML capabilities identified, which columns could be targets, expected model performance, key feature signals. Write in full paragraphs, no bullets.]
+
+## Feature Impact Table
+[Write a Markdown table: Column | Type | ML Role | Key Signal]
+
+## Strategic Conclusion
+[Write 2 paragraphs with specific recommendations and next steps.]"""
 
         user_prompt = f"Dataset Stats JSON: {stats_json}"
 
         try:
-            # Use internal streaming for better connection stability
-            response = self.client.chat([
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt},
-            ], stream=True)
+            response = call_ollama_sync(
+                system_prompt=system_prompt,
+                user_prompt=user_prompt,
+                model=self.model
+            )
             
             # Validate response
             if not response or len(response) < 50:
@@ -228,7 +209,7 @@ class SummaryAgent:
             logger.error(f"LLM {stage} call failure: {exc}")
             error_type = "Timeout" if "timeout" in str(exc).lower() else "Connection Error"
             return f"""### ⚠️ Forensic Engine Offline
-The local AI node (Ollama: {self.client.model}) is currently unresponsive. 
+The local AI node (Ollama: {self.model}) is currently unresponsive. 
 
 **Error Type:** {error_type}
 **Technical Details:** {str(exc)}
@@ -237,6 +218,9 @@ The local AI node (Ollama: {self.client.model}) is currently unresponsive.
 
     def _split_response(self, text: str) -> Dict[str, str]:
         """Splits LLM output into brief chat response and detailed lab narrative."""
+        # Debug: log the raw LLM output so we can see what the model produces
+        logger.info(f"[RAW LLM OUTPUT] length={len(text)}, preview={text[:300]!r}")
+        
         # 1. Clean common LLM-generated garbage
         text = re.sub(r'(Response Structure Requirement:|STRICT PROTOCOL:|STRICT FORMAT:).*?\n', '', text, flags=re.IGNORECASE | re.DOTALL)
         
@@ -254,9 +238,9 @@ The local AI node (Ollama: {self.client.model}) is currently unresponsive.
                 pass
             
         brief = ""
-        detailed = text
+        detailed = ""
         
-        # 3. Handle tags
+        # 3. Handle tags — robust splitting
         if "<<<BRIEF>>>" in text and "<<<DETAILED>>>" in text:
             try:
                 parts = text.split("<<<DETAILED>>>")
@@ -265,17 +249,34 @@ The local AI node (Ollama: {self.client.model}) is currently unresponsive.
             except:
                 pass
         elif "<<<BRIEF>>>" in text:
-            brief = text.replace("<<<BRIEF>>>", "").strip()
-        
+            # LLM gave brief but no DETAILED tag — use everything after brief as detailed
+            parts = text.split("<<<BRIEF>>>", 1)
+            remaining = parts[1] if len(parts) > 1 else ""
+            # The brief is first block before ##, detailed is everything from first ## heading
+            heading_match = re.search(r'^##\s', remaining, re.MULTILINE)
+            if heading_match:
+                brief = remaining[:heading_match.start()].strip()
+                detailed = remaining[heading_match.start():].strip()
+            else:
+                brief = remaining[:200].strip()
+                detailed = remaining.strip()
+        else:
+            # LLM ignored all tags — use full output as detailed, extract brief from start
+            detailed = text.strip()
+            heading_match = re.search(r'^##\s', text, re.MULTILINE)
+            if heading_match:
+                brief = text[:heading_match.start()].strip()[:300]
+                detailed = text[heading_match.start():].strip()
+            
         # 4. Final cleanup of any lingering tags in detailed
         detailed = re.sub(r'<<<BRIEF>>>|<<<DETAILED>>>', '', detailed).strip()
         
-        # Fallback if splitting fails or returns empty
+        # Fallback brief if empty
         if not brief:
-            # Take first sentence or first 150 chars as brief
-            paras = text.split("\n\n")
+            paras = (detailed or text).split("\n\n")
             brief = paras[0].strip() if paras else text
             if len(brief) > 150:
                 brief = brief[:147] + "..."
             
+        logger.info(f"[SPLIT RESULT] brief_len={len(brief)}, detailed_len={len(detailed)}, captions={len(captions)}")
         return {"brief": brief, "detailed": detailed, "captions": captions}

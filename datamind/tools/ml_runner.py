@@ -1,5 +1,5 @@
 """
-Universal ML Runner for DataMind v4.0.
+Universal ML Runner for DataMind v4.0 (Headless)
 Handles automated task selection, preprocessing, and model training.
 """
 
@@ -12,11 +12,11 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 import pandas as pd
 import numpy as np
 from sklearn.model_selection import train_test_split, KFold, StratifiedKFold, cross_val_score
-from sklearn.preprocessing import StandardScaler, LabelEncoder, OneHotEncoder
+from sklearn.preprocessing import StandardScaler, LabelEncoder
 from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier, RandomForestRegressor, GradientBoostingRegressor
 from sklearn.linear_model import LogisticRegression, Ridge, LinearRegression
 from sklearn.metrics import (
-    accuracy_score, f1_score, classification_report, confusion_matrix,
+    accuracy_score, classification_report, confusion_matrix,
     mean_squared_error, mean_absolute_error, r2_score
 )
 from sklearn.decomposition import PCA
@@ -28,15 +28,15 @@ try:
 except ImportError:
     HAS_STATSMODELS = False
 
-from datamind.llm.ollama_client import OllamaClient
+from datamind.llm.ollama_client import call_ollama_sync
 
 logger = logging.getLogger(__name__)
 
 class UniversalMLRunner:
     """Universal ML Engine with automated task selection and model optimization."""
 
-    def __init__(self, ollama_client: Optional[OllamaClient] = None):
-        self.client = ollama_client or OllamaClient()
+    def __init__(self):
+        pass
 
     def auto_select_task(self, df: pd.DataFrame, target_col: Optional[str]) -> str:
         """Determines the ML task type based on target characteristics."""
@@ -104,21 +104,17 @@ class UniversalMLRunner:
         cat_cols = X.select_dtypes(include=['object', 'category']).columns.tolist()
         for col in cat_cols:
             if X[col].nunique() <= 20:
-                # OneHot for low card
                 dummies = pd.get_dummies(X[col], prefix=col)
                 X = pd.concat([X, dummies], axis=1)
                 X.drop(columns=[col], inplace=True)
             else:
-                # Label for high card
                 le = LabelEncoder()
                 X[col] = le.fit_transform(X[col].astype(str))
 
-        # 6. Encode Target if classification
         if task == "classification" and y is not None:
             le_target = LabelEncoder()
             y = le_target.fit_transform(y.astype(str))
 
-        # 7. Scale Numeric Features
         scaler = StandardScaler()
         X_scaled = scaler.fit_transform(X)
         X_final = pd.DataFrame(X_scaled, columns=X.columns)
@@ -147,8 +143,15 @@ class UniversalMLRunner:
         best_name = ""
         cv_results = []
 
+        # Optimization: Sample for CV if dataset is large
+        X_train_cv, y_train_cv = X_train, y_train
+        if len(X_train) > 15000:
+            X_train_cv = X_train.sample(15000, random_state=42)
+            y_train_cv = y_train[X_train_cv.index]
+            logger.info(f"Large dataset detected ({len(X_train)} rows). Sampling to 15k for cross-validation selection.")
+
         for name, model in models:
-            scores = cross_val_score(model, X_train, y_train, cv=cv, scoring='accuracy')
+            scores = cross_val_score(model, X_train_cv, y_train_cv, cv=cv, scoring='accuracy')
             mean_score = scores.mean()
             cv_results.append({"Model": name, "Mean Accuracy": f"{mean_score:.3f}", "Std Dev": f"{scores.std():.3f}"})
             if mean_score > best_mean_acc:
@@ -156,11 +159,16 @@ class UniversalMLRunner:
                 best_model = model
                 best_name = name
 
-        # Final fit on training set
-        best_model.fit(X_train, y_train)
+        # Optimization: Cap final training size for responsiveness
+        X_train_final, y_train_final = X_train, y_train
+        if len(X_train) > 50000:
+            X_train_final = X_train.sample(50000, random_state=42)
+            y_train_final = y_train[X_train_final.index]
+            logger.info(f"Capping final training to 50k rows for engine responsiveness.")
+
+        best_model.fit(X_train_final, y_train_final)
         y_pred = best_model.predict(X_test)
         
-        # Feature importance
         fi_df = None
         if hasattr(best_model, 'feature_importances_'):
             fi_df = pd.DataFrame({'feature': feature_names, 'importance': best_model.feature_importances_})
@@ -168,12 +176,11 @@ class UniversalMLRunner:
 
         return {
             "best_model_name": best_name,
-            "best_model": best_model,
-            "cv_scores_table": pd.DataFrame(cv_results),
-            "test_accuracy": accuracy_score(y_test, y_pred),
+            "cv_scores_table": cv_results, # already a list of dicts
+            "test_accuracy": float(accuracy_score(y_test, y_pred)),
             "report": classification_report(y_test, y_pred, output_dict=True),
-            "feature_importances": fi_df,
-            "confusion_matrix": confusion_matrix(y_test, y_pred)
+            "feature_importances": fi_df.to_dict(orient="records") if fi_df is not None else [],
+            "confusion_matrix": confusion_matrix(y_test, y_pred).tolist()
         }
 
     def run_regression(self, X_train, X_test, y_train, y_test, feature_names):
@@ -190,8 +197,15 @@ class UniversalMLRunner:
         best_name = ""
         cv_results = []
 
+        # Optimization: Sample for CV if dataset is large
+        X_train_cv, y_train_cv = X_train, y_train
+        if len(X_train) > 15000:
+            X_train_cv = X_train.sample(15000, random_state=42)
+            y_train_cv = y_train[X_train_cv.index]
+            logger.info(f"Large dataset detected ({len(X_train)} rows). Sampling to 15k for cross-validation selection.")
+
         for name, model in models:
-            scores = cross_val_score(model, X_train, y_train, cv=cv, scoring='r2')
+            scores = cross_val_score(model, X_train_cv, y_train_cv, cv=cv, scoring='r2')
             mean_score = scores.mean()
             cv_results.append({"Model": name, "Mean R2": f"{mean_score:.3f}"})
             if mean_score > best_r2:
@@ -199,7 +213,14 @@ class UniversalMLRunner:
                 best_model = model
                 best_name = name
 
-        best_model.fit(X_train, y_train)
+        # Optimization: Cap final training size for responsiveness
+        X_train_final, y_train_final = X_train, y_train
+        if len(X_train) > 50000:
+            X_train_final = X_train.sample(50000, random_state=42)
+            y_train_final = y_train[X_train_final.index]
+            logger.info(f"Capping final training to 50k rows for engine responsiveness.")
+
+        best_model.fit(X_train_final, y_train_final)
         y_pred = best_model.predict(X_test)
 
         fi_df = None
@@ -209,26 +230,22 @@ class UniversalMLRunner:
 
         return {
             "best_model_name": best_name,
-            "best_model": best_model,
-            "cv_scores_table": pd.DataFrame(cv_results),
-            "test_r2": r2_score(y_test, y_pred),
-            "test_rmse": np.sqrt(mean_squared_error(y_test, y_pred)),
-            "test_mae": mean_absolute_error(y_test, y_pred),
-            "feature_importances": fi_df
+            "cv_scores_table": cv_results,
+            "test_r2": float(r2_score(y_test, y_pred)),
+            "test_rmse": float(np.sqrt(mean_squared_error(y_test, y_pred))),
+            "test_mae": float(mean_absolute_error(y_test, y_pred)),
+            "feature_importances": fi_df.to_dict(orient="records") if fi_df is not None else []
         }
 
     def run_clustering(self, df: pd.DataFrame, feature_names: List[str]):
         """Runs KMeans clustering with elbow optimization and LLM labeling."""
-        # 1. Cap at 10,000 rows
         n_samples = min(len(df), 10000)
         df_sample = df.sample(n_samples, random_state=42)
         X = df_sample[feature_names]
 
-        # 2. PCA for Visuals
         pca = PCA(n_components=2)
         X_pca = pca.fit_transform(X)
 
-        # 3. Elbow point detection
         k_limit = min(8, int(np.sqrt(n_samples)))
         inertias = []
         for k in range(2, k_limit + 1):
@@ -236,21 +253,17 @@ class UniversalMLRunner:
             km.fit(X)
             inertias.append(km.inertia_)
 
-        # Find "Elbow" (max drop)
         deltas = np.diff(inertias)
         optimal_k = 2
         if len(deltas) > 0:
-            optimal_k = np.argmin(deltas) + 2 # argmin of diff is max drop between k and k+1
+            optimal_k = np.argmin(deltas) + 2
 
-        # 4. Final KMeans
         kmeans = KMeans(n_clusters=optimal_k, random_state=42, n_init=10)
         clusters = kmeans.fit_predict(X)
         centroids = kmeans.cluster_centers_
 
-        # 5. LLM Labeling
         cluster_descriptions = {}
         for i in range(optimal_k):
-            # Find top features for this centroid
             c_vals = centroids[i]
             global_means = X.mean().values
             diffs = c_vals - global_means
@@ -264,16 +277,23 @@ class UniversalMLRunner:
             summary = ", ".join(labels)
             label_prompt = f"Given these characteristics: {summary}. Generate a 5-word business label for this customer/data cluster."
             try:
-                label = self.client.chat([{"role": "user", "content": label_prompt}]).strip()
+                label = call_ollama_sync(
+                    system_prompt="You are a dataset cluster labeling agent.",
+                    user_prompt=label_prompt
+                )
+                if label:
+                    label = label.strip()
+                else:
+                    label = f"Cluster {i+1}"
             except:
                 label = f"Cluster {i+1} Characteristics"
             
             cluster_descriptions[i] = {"label": label, "summary": summary}
 
         return {
-            "optimal_k": optimal_k,
-            "cluster_labels": clusters,
-            "pca_2d_coords": X_pca,
+            "optimal_k": int(optimal_k),
+            "cluster_labels": clusters.tolist(),
+            "pca_2d_coords": X_pca.tolist(),
             "cluster_descriptions": cluster_descriptions
         }
 
@@ -281,9 +301,7 @@ class UniversalMLRunner:
         """Forecasting using ARIMA or LinearRegression fallback."""
         df_ts = df[[date_col, target_col]].dropna().sort_values(date_col)
         df_ts.set_index(date_col, inplace=True)
-        
-        # Aggregate if multiple entries per date
-        df_ts = df_ts.resample('D').mean().fillna(method='ffill')
+        df_ts = df_ts.resample('D').mean().ffill()
         
         history = df_ts[target_col].values
         model_used = "ARIMA(1,1,1)"
@@ -303,20 +321,18 @@ class UniversalMLRunner:
             model_used = "Linear Trend Fallback"
 
         if model_used == "Linear Trend Fallback":
-            # Simple Regression on ordinal time
             X = np.arange(len(history)).reshape(-1, 1)
             lr = LinearRegression()
             lr.fit(X, history)
             X_future = np.arange(len(history), len(history) + 10).reshape(-1, 1)
             forecast_vals = lr.predict(X_future)
 
-        # Dates for forecast
         last_date = df_ts.index[-1]
         forecast_dates = pd.date_range(start=last_date + pd.Timedelta(days=1), periods=10)
 
         return {
             "model_used": model_used,
-            "forecast_values": forecast_vals,
-            "forecast_dates": forecast_dates,
-            "confidence_intervals": conf_intervals
+            "forecast_values": forecast_vals.tolist() if hasattr(forecast_vals, 'tolist') else list(forecast_vals),
+            "forecast_dates": [str(d) for d in forecast_dates],
+            "confidence_intervals": conf_intervals.tolist() if conf_intervals is not None else None
         }

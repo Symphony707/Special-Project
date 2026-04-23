@@ -1,8 +1,6 @@
 # DataMind
 
-<div align="center">
-
-**An Autonomous AI-Powered Data Intelligence Platform**
+An Autonomous AI-Powered Data Intelligence Platform
 
 *Transform raw data into forensic insights and strategic forecasts — without writing a single line of code.*
 
@@ -11,8 +9,6 @@
 [![Ollama](https://img.shields.io/badge/Ollama-Local_LLM-000000?style=flat)](https://ollama.ai)
 [![SQLite](https://img.shields.io/badge/SQLite-WAL_Mode-003B57?style=flat&logo=sqlite&logoColor=white)](https://sqlite.org)
 [![License](https://img.shields.io/badge/License-MIT-green?style=flat)](LICENSE)
-
-</div>
 
 ---
 
@@ -27,18 +23,21 @@ Upload any structured data file. DataMind reads it, learns from it, remembers pa
 ## Features
 
 ### Core Intelligence
+
 - **Multi-Agent Architecture** — Specialized agents for analysis, prediction, visualization, summarization, and diagnostics work in coordination
 - **Autonomous Domain Discovery** — Automatically identifies whether your data is financial, medical, e-commerce, HR, logistics, or general without any configuration
 - **Self-Learning Memory** — Patterns discovered in your data are stored and injected into future analyses, making every session smarter than the last
 - **Verified Reasoning** — A security firewall ensures agents only reference columns that actually exist — no hallucinated insights
 
 ### Analysis & Prediction
+
 - **Forensic Analysis** — Structured executive briefings: Context → Finding → Evidence → Implication
 - **Universal Prediction Engine** — Auto-detects task type (classification, regression, clustering, time-series) from your data
 - **Multi-Model Benchmarking** — Runs Random Forest, Gradient Boosting, and Linear models in parallel, picks the best by cross-validation
 - **Feature Intelligence** — Interactive feature importance charts explain *why* the model makes its predictions
 
 ### Chatbot Interface
+
 - **Three-Tier Response System**:
   - ⚡ **Instant** (< 100ms) — Row counts, column stats, null checks via direct computation
   - 💬 **Quick** (< 3s) — Focused questions via lightweight LLM with streaming output
@@ -47,12 +46,14 @@ Upload any structured data file. DataMind reads it, learns from it, remembers pa
 - **Conversation Memory** — Full chat history persisted per user per file, restored on re-login
 
 ### User & Data Management
+
 - **Secure Authentication** — bcrypt password hashing, account lockout after 5 failed attempts, server-side session tokens
 - **Global File Deduplication** — SHA256 hashing prevents duplicate storage; the same file uploaded by multiple users is stored once
 - **Per-User Data Isolation** — Every analysis, pattern, prediction, and chat is strictly scoped to the authenticated user
 - **My Files Dashboard** — Manage, reload, and delete previously analyzed datasets with full history restored
 
 ### Security
+
 - **Prompt Injection Defense** — Uploaded data is wrapped in trust boundaries before reaching the LLM
 - **File Bomb Protection** — Magic bytes verification, row/column caps, and memory estimation block malicious uploads
 - **IDOR Prevention** — Every data fetch verifies ownership before returning results
@@ -64,7 +65,7 @@ Upload any structured data file. DataMind reads it, learns from it, remembers pa
 ## Tech Stack
 
 | Layer | Technology |
-|---|---|
+| --- | --- |
 | Frontend | Streamlit (custom dark-mode CSS, glassmorphism UI) |
 | AI Engine | Ollama — `qwen2.5-coder:7b` (runs fully local) |
 | Backend | Python 3.10+ (async orchestration, multi-agent routing) |
@@ -78,7 +79,7 @@ Upload any structured data file. DataMind reads it, learns from it, remembers pa
 
 ## Project Structure
 
-```
+```text
 DataMind/
 ├── app.py                        # Entry point — auth routing + app startup
 ├── config.py                     # All constants loaded from .env
@@ -157,7 +158,7 @@ DataMind/
 ### Prerequisites
 
 | Requirement | Version | Notes |
-|---|---|---|
+| --- | --- | --- |
 | Python | 3.10+ | |
 | Ollama | Latest | [Install from ollama.ai](https://ollama.ai) |
 | Git | Any | |
@@ -182,6 +183,7 @@ ollama pull qwen2.5-coder:7b
 ```
 
 Make sure Ollama is running in the background:
+
 ```bash
 ollama serve
 ```
@@ -201,6 +203,7 @@ SESSION_SECRET=your-secret-key-here
 ```
 
 Generate a secure `SESSION_SECRET`:
+
 ```bash
 python -c "import secrets; print(secrets.token_hex(32))"
 ```
@@ -218,7 +221,7 @@ Visit `http://localhost:8501` in your browser.
 ## Environment Variables
 
 | Variable | Default | Description |
-|---|---|---|
+| --- | --- | --- |
 | `OLLAMA_BASE_URL` | `http://localhost:11434` | Ollama server address |
 | `OLLAMA_MODEL` | `qwen2.5-coder:7b` | Model to use for analysis |
 | `SESSION_SECRET` | *(required)* | Secret key for session signing |
@@ -230,7 +233,7 @@ Visit `http://localhost:8501` in your browser.
 ## Supported File Formats
 
 | Format | Extension | Notes |
-|---|---|---|
+| --- | --- | --- |
 | CSV | `.csv` | Auto-detects encoding and delimiter |
 | Excel | `.xlsx`, `.xls` | Max 100,000 rows for safety |
 | JSON | `.json` | Array or records format |
@@ -244,7 +247,7 @@ Visit `http://localhost:8501` in your browser.
 
 ### The Agent Pipeline
 
-```
+```text
 User Query
     │
     ▼
@@ -258,7 +261,7 @@ Orchestrator (Intent Classification)
 
 ### The Self-Learning Loop
 
-```
+```text
 Analysis Complete
     │
     ▼
@@ -279,7 +282,7 @@ Every session is smarter than the last
 
 ### The Three-Tier Chat
 
-```
+```text
 User Message
     │
     ▼
@@ -296,7 +299,7 @@ TierClassifier (regex, no LLM)
 
 DataMind is built with defense-in-depth. Every external input passes through multiple independent validation layers:
 
-```
+```text
 External Input
     │
     ▼
@@ -327,7 +330,7 @@ The SQLite database uses WAL journal mode for concurrent multi-user access and e
 **Key tables:**
 
 | Table | Purpose |
-|---|---|
+| --- | --- |
 | `users` | Accounts with lockout + activity tracking |
 | `user_sessions` | Server-side session tokens with expiry |
 | `global_files` | Deduplicated file registry (SHA256) |
@@ -368,7 +371,7 @@ streamlit run app.py
 - Follow PEP 8
 - All new modules must include a module-level docstring
 - All database operations must use parameterized queries
-- All new agent methods must return `{"success": bool, "result": ...}`
+- All new agent methods must return {"success": bool, "result": ...}
 
 ---
 
@@ -398,8 +401,4 @@ This project is licensed under the MIT License. See [LICENSE](LICENSE) for detai
 
 ---
 
-<div align="center">
-
 Built by **Shreyas Reddy**
-
-</div>
